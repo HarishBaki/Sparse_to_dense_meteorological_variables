@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+Sparse_to_dense_meteorological_variables
+
+RTMA/
+data/   
+110m_cultural/
+.devcontainer
