@@ -178,3 +178,6 @@ RTMA/
 data/   
 110m_cultural/
 .devcontainer
+slurmout/
+checkpoints/
+wandb/
