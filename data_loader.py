@@ -31,16 +31,14 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]
 
         #print(f"Total valid samples: {len(self.valid_indices)}")
+        self.ds = ds
 
     def __len__(self):
         return len(self.valid_indices)
 
     def __getitem__(self, idx):
         real_idx = self.valid_indices[idx]
-        ds = xr.open_zarr(self.zarr_store)[self.variable]
-        ds = ds.sel(time=slice(self.dates_range[0], self.dates_range[1]))
-
-        output = ds.isel(time=real_idx)
+        output = self.ds.isel(time=real_idx)
 
         # Grab station values from output
         station_values = output.values[self.y_indices, self.x_indices]
