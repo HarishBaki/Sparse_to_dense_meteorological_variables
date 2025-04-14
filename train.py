@@ -211,6 +211,9 @@ def main():
     train_dates_range = ['2018-01-01T00', '2021-12-31T23']
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
+    missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
+    batch_size = 32
+
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         variable,
@@ -221,12 +224,13 @@ def main():
         nysm_latlon,
         y_indices,
         x_indices,
-        mask
+        mask,
+        missing_times
     )
     train_sampler = DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset,
-        batch_size=32,
+        batch_size=batch_size,
         sampler=train_sampler,
         shuffle=False,
         pin_memory=True
@@ -241,12 +245,13 @@ def main():
         nysm_latlon,
         y_indices,
         x_indices,
-        mask
+        mask,
+        missing_times
     )
     validation_sampler = DistributedSampler(validation_dataset)
     validation_dataloader = DataLoader(
         validation_dataset,
-        batch_size=32,
+        batch_size=batch_size,
         shuffle=False,
         sampler=validation_sampler,
         pin_memory=True
@@ -261,12 +266,13 @@ def main():
         nysm_latlon,
         y_indices,
         x_indices,
-        mask
+        mask,
+        missing_times
     )
     test_sampler = DistributedSampler(test_dataset)
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=32,
+        batch_size=batch_size,
         shuffle=False,
         sampler=test_sampler,
         pin_memory=True

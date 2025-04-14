@@ -8,7 +8,7 @@ import pandas as pd
 import time
 
 class RTMA_sparse_to_dense_Dataset(Dataset):
-    def __init__(self, zarr_store,variable, dates_range, orography, RTMA_lat, RTMA_lon, nysm_latlon, y_indices, x_indices,mask):
+    def __init__(self, zarr_store,variable, dates_range, orography, RTMA_lat, RTMA_lon, nysm_latlon, y_indices, x_indices,mask,missing_times):
         self.zarr_store = zarr_store
         self.variable = variable
         self.dates_range = dates_range
@@ -25,14 +25,10 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         ds = ds.sel(time=slice(dates_range[0], dates_range[1]))
         #print(f"Total samples in the dataset: {len(ds.time)}")
 
-        # Filter out all-NaN samples
-        valid_indices = []
-        for i in range(len(ds.time)):
-            values = ds.isel(time=i).values[y_indices, x_indices]
-            if not np.isnan(values).all():
-                valid_indices.append(i)
+        # Filter the valid indices based on ds.time and missing_times
 
-        self.valid_indices = valid_indices
+        valid_times = ds["time"].where(~ds["time"].isin(missing_times))
+        self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]
 
         #print(f"Total valid samples: {len(self.valid_indices)}")
 
@@ -99,6 +95,7 @@ if __name__ == "__main__":
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
     dates_range = ['2018-01-01T00','2021-12-31T23']
+    missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
 
     # compute time taken call dataset
     start_time = time.time()
@@ -113,7 +110,8 @@ if __name__ == "__main__":
         nysm_latlon,
         y_indices,
         x_indices,
-        mask
+        mask,
+        missing_times
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
