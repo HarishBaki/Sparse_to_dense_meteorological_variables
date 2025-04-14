@@ -50,7 +50,7 @@ def validation_step(model, batch, criterion, device):
 
     return loss.item()
 
-def save_model_checkpoint(model, optimizer, epoch, path, is_best=False):
+def save_model_checkpoint(model, optimizer, epoch, path):
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
@@ -58,11 +58,6 @@ def save_model_checkpoint(model, optimizer, epoch, path, is_best=False):
     }
     torch.save(checkpoint, path)
     print(f" Model checkpoint saved at: {path}")
-
-    if is_best:
-        best_path = path.replace(".pt", "_best.pt")
-        torch.save(checkpoint, best_path)
-        print(f"Best model checkpoint saved at: {best_path}")
 
 def restore_model_checkpoint(model, optimizer, path, device="cuda"):
     checkpoint = torch.load(path, map_location=device)
@@ -150,7 +145,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, de
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
                 best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
-                save_model_checkpoint(model, optimizer, epoch, best_ckpt_path, is_best=True)
+                save_model_checkpoint(model, optimizer, epoch, best_ckpt_path)
 
             # Always update latest checkpoint
             save_model_checkpoint(model, optimizer, epoch, latest_ckpt_path)
@@ -183,14 +178,14 @@ def main():
 
     # %%
     # === Loading some topography and masking data ===
-    orography = xr.open_dataset('/mnt/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables/orography.nc').orog
+    orography = xr.open_dataset('orography.nc').orog
     RTMA_lat = orography.latitude.values
     RTMA_lon = orography.longitude.values
     orography = orography.values
 
-    mask = xr.open_dataset('/mnt/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables/mask_2d.nc').mask
+    mask = xr.open_dataset('mask_2d.nc').mask
     # Load NYSM station data
-    nysm = pd.read_csv('/mnt/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables/nysm.csv')
+    nysm = pd.read_csv('nysm.csv')
     # NYSM station lat/lon
     nysm_latlon = np.stack([
         nysm['lat [degrees]'].values,
@@ -212,7 +207,7 @@ def main():
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
-    batch_size = 64
+    batch_size = 24
 
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
@@ -233,7 +228,8 @@ def main():
         batch_size=batch_size,
         sampler=train_sampler,
         shuffle=False,
-        pin_memory=True
+        pin_memory=True,
+        num_workers=batch_size
     )
     validation_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
@@ -254,7 +250,8 @@ def main():
         batch_size=batch_size,
         shuffle=False,
         sampler=validation_sampler,
-        pin_memory=True
+        pin_memory=True,
+        num_workers=batch_size
     )
     test_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
@@ -275,7 +272,8 @@ def main():
         batch_size=batch_size,
         shuffle=False,
         sampler=test_sampler,
-        pin_memory=True
+        pin_memory=True,
+        num_workers=batch_size
     )
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Data loaded successfully.")
