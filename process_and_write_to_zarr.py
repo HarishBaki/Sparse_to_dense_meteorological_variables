@@ -31,13 +31,13 @@ def init_zarr_store(zarr_store, dates,var_name,mode):
     orography.attrs = {}
     template = orography.orog.pipe(xr.zeros_like).expand_dims(time=len(dates))
     template['time'] = dates
-    template = template.chunk({'time': 24})
+    template = template.chunk({'time': 1})
     template = template.transpose('time','y','x')
     template = template.assign_coords({
         'latitude': orography.latitude,
         'longitude': orography.longitude
     })
-    template.to_dataset(name = var_name).to_zarr(zarr_store, compute=False, consolidated=True, mode=mode)
+    template.to_dataset(name = var_name).to_zarr(zarr_store, compute=False, mode=mode)
 
 init_zarr_store(zarr_store, dates, var_name, mode)
 
@@ -77,7 +77,7 @@ def daily_processing(variable,date):
         ):
         ds = ds.reindex(time=full_times)        # pad missing hours with NaNs
 
-    ds = ds.chunk({'time': 24, 'y': ny, 'x': nx})
+    ds = ds.chunk({'time': 1, 'y': ny, 'x': nx})
     return ds
 
 def write_chunk(ds_chunk, zarr_store, region):
@@ -86,7 +86,7 @@ def write_chunk(ds_chunk, zarr_store, region):
     """
     ds_chunk.to_zarr(zarr_store, region=region, mode='a')
 
-def process_and_write_single_day(date, variable, zarr_store):
+def process_and_write_single_day(date, variable, zarr_store, missing_data_entries):
     try:
         ds = daily_processing(variable, date)
         time_indices = np.searchsorted(dates.values, ds.time.values)
@@ -107,3 +107,10 @@ for i in range(0, len(yyyymmdd), batch_size):
         delayed(process_and_write_single_day)(date, variable, zarr_store)
         for date in batch_dates
     )
+
+# Check for missing data entries 
+ds = xr.open_zarr(zarr_store)
+nan_times = ds[variable].isnull().any(dim=['y','x'])
+nan_times = ds["time"].where(nan_times).dropna(dim="time").load()
+# save nan times to netcdf
+nan_times.to_netcdf(f'nan_times_{variable}.nc')
