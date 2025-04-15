@@ -207,7 +207,7 @@ def main():
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
-    batch_size = 32
+    batch_size = 64
 
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
