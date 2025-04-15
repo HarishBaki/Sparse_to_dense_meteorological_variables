@@ -60,6 +60,8 @@ if __name__ == "__main__":
                         help='Variable name (e.g., i10fg, u10, v10)')
     parser.add_argument('--mode', type=str, default='w', choices=['w', 'a'],
                         help='Mode to write to Zarr store: w (write) or a (append)')
+    parser.add_argument('--wandb_id', type=str, default=None,
+                        help='WandB ID for logging (optional)')
 
     args = parser.parse_args()
 
@@ -96,8 +98,8 @@ if __name__ == "__main__":
 
     # %%
     # === Loading the RTMA data ===
-    variable = 'i10fg'
-    mode = 'w' # only for 1st variable, for the rest 'a'
+    variable = args.variable
+    mode = args.mode
     zarr_store = 'data/RTMA.zarr'
     train_dates_range = ['2018-01-01T00', '2021-12-31T23']
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
@@ -148,7 +150,7 @@ if __name__ == "__main__":
     dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
     zarr_store = 'data/RTMA_test.zarr'
     init_zarr_store(zarr_store, dates, variable, mode)
-
+    print(f"Zarr store initialized at {zarr_store}.")
     # %%
     # === Step 2: Evaluate and write predictions using matched time indices ===
     ds = xr.open_zarr(zarr_store, consolidated=False)
@@ -158,6 +160,12 @@ if __name__ == "__main__":
     # Use low-level Zarr for writing directly
     zarr_write = zarr.open(zarr_store, mode='a')
     zarr_variable = zarr_write[variable]
+
+    # %%
+    # === Initializing the wandb ===
+    wandb.init(
+        project="sparse-to-dense-RTMA",id=args.wandb_id,resume='allow',
+    )
 
     # %%
     # === Validation and saving into test zarr===
@@ -189,4 +197,6 @@ if __name__ == "__main__":
             
     avg_val_loss = val_loss_total / len(test_dataloader)
     print(f"Test Loss: {avg_val_loss:.4f}")
+    wandb.log({"Test Loss": avg_val_loss})
+    wandb.finish()
     # %%
