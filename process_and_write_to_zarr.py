@@ -10,6 +10,17 @@ import os
 import dask.array as da
 import os, sys, time, glob, re
 
+'''
+variable: the variable name outside the RTMA directory.
+var_name: the variable name inside each individual files. 
+i10fg,i10fg for wind gust
+DPT,d2m for dew point temperature
+PRES,sp for pressure
+SPFH,sh2 for specific humidity
+t2m,t2m for temperature
+WDIR,wdir10 for wind direction
+WIND,si10 for wind speed
+'''
 
 if len(sys.argv) > 1:
     variable = sys.argv[1]
@@ -110,7 +121,7 @@ for i in range(0, len(yyyymmdd), batch_size):
 
 # Check for missing data entries 
 ds = xr.open_zarr(zarr_store)
-nan_times = ds[variable].isnull().any(dim=['y','x'])
+nan_times = ds[var_name].isnull().any(dim=['y','x'])
 nan_times = ds["time"].where(nan_times).dropna(dim="time").load()
 # save nan times to netcdf
-nan_times.to_netcdf(f'nan_times_{variable}.nc')
+nan_times.to_netcdf(f'nan_times_{var_name}.nc')

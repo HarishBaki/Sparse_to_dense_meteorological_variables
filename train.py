@@ -92,7 +92,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, de
         show_progress = not dist.is_initialized() or dist.get_rank() == 0
         train_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]", leave=False) if show_progress else train_dataloader
         for batch in train_bar:
-            input_tensor, target_tensor = batch
+            input_tensor, target_tensor,_ = batch
             input_tensor = input_tensor.to(device, non_blocking=True)
             target_tensor = target_tensor.unsqueeze(1).to(device, non_blocking=True)
 
@@ -114,7 +114,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, de
         val_bar = tqdm(val_dataloader, desc=f"Epoch {epoch+1}/{num_epochs} [Val]", leave=False) if show_progress else val_dataloader
         with torch.no_grad():
             for batch in val_bar:
-                input_tensor, target_tensor = batch
+                input_tensor, target_tensor,_ = batch
                 input_tensor = input_tensor.to(device, non_blocking=True)
                 target_tensor = target_tensor.unsqueeze(1).to(device, non_blocking=True)
 
@@ -207,7 +207,7 @@ def main():
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
-    batch_size = 24
+    batch_size = 32
 
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,

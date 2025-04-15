@@ -62,7 +62,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         input_tensor = torch.tensor(input_tensor, dtype=torch.float32)
         target_tensor = torch.tensor(target_tensor, dtype=torch.float32)
         # Return input and target tensors
-        return input_tensor, target_tensor
+        return input_tensor, target_tensor, str(output.time.values)
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
     # Example usage
-    for i, (input_tensor, target_tensor) in enumerate(dataloader):
+    for i, (input_tensor, target_tensor,_) in enumerate(dataloader):
         input_tensor = input_tensor.to(device)
         target_tensor = target_tensor.to(device)
         print(f"Batch {i+1}:")
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
     # Check time taken for another iteration
     start_time = time.time()
-    for i, (input_tensor, target_tensor) in enumerate(dataloader):
+    for i, (input_tensor, target_tensor,_) in enumerate(dataloader):
         input_tensor = input_tensor.to(device)
         target_tensor = target_tensor.to(device)
         print(f"Batch {i+1}:")
