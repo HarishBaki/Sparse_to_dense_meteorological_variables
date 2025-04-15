@@ -1,1 +1,1 @@
-rclone copy --progress --transfers 24 /data/harish/Sparse_to_dense_meteorological_variables/RTMA.zarr hb533188_dgxhead:/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables/data
+rclone copy --progress --transfers 24 /data/harish/Sparse_to_dense_meteorological_variables/RTMA.zarr hb533188_dgxhead:/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables/data/RTMA.zarr
