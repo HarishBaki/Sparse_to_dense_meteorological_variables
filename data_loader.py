@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
-    dates_range = ['2018-01-01T00','2021-12-31T23']
+    dates_range = ['2023-11-09T06','2023-11-09T06']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
 
     # compute time taken call dataset
@@ -116,31 +116,33 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True,num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False,num_workers=2, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
+    iterator = iter(dataloader)
     # Example usage
-    for i, (input_tensor, target_tensor,_) in enumerate(dataloader):
+    first_batch = next(iterator,None)
+    if first_batch is not None:
+        input_tensor, target_tensor,time_instance = first_batch
         input_tensor = input_tensor.to(device)
         target_tensor = target_tensor.to(device)
-        print(f"Batch {i+1}:")
         print("Input tensor shape:", input_tensor.shape)
         print("Target tensor shape:", target_tensor.shape)
-        # Break after first batch for demonstration
-        break
+    else:
+        print("No data in this batch.")
     end_time = time.time()
     print(f"DataLoader iteration time: {end_time - start_time:.2f} seconds")
 
     # Check time taken for another iteration
-    start_time = time.time()
-    for i, (input_tensor, target_tensor,_) in enumerate(dataloader):
+    second_batch = next(iterator,None)
+    if second_batch is not None:
+        input_tensor, target_tensor,time_instance = second_batch
         input_tensor = input_tensor.to(device)
         target_tensor = target_tensor.to(device)
-        print(f"Batch {i+1}:")
         print("Input tensor shape:", input_tensor.shape)
         print("Target tensor shape:", target_tensor.shape)
-        # Break after first batch for demonstration
-        break
+    else:
+        print("No data in this batch.")
     end_time = time.time()
     print(f"DataLoader iteration time: {end_time - start_time:.2f} seconds")
