@@ -4,7 +4,7 @@
 #SBATCH --output=slurmout/ddp_train-%j.out
 #SBATCH --error=slurmout/ddp_train-%j.err
 #SBATCH --time=00-01:00:00
-#SBATCH --mem=80gb
+#SBATCH --mem=160gb
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus=2
