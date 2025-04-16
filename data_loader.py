@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # Convert flat indices to 2D (y, x)
     y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
 
-    zarr_store = 'data/RTMA.zarr'
+    zarr_store = 'data/RTMA_test.zarr'
     variable = 'i10fg'
     dates_range = ['2023-11-09T06','2023-11-09T06']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
