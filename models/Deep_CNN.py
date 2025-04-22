@@ -6,6 +6,8 @@ import torch.nn.functional as F
 # %%
 class DCNN(nn.Module):
     '''
+    This architecture is implimented followed by the paper "Global field reconstruction from sparse sensors with Voronoi tessellation-assisted deep learning"
+    The architecture available at "https://github.com/kfukami/Voronoi-CNN"
     Deep Convolutional Neural Network (DCNN) for image processing tasks.
     This model consists of multiple convolutional layers followed by ReLU activations.
     Parameters:
