@@ -19,6 +19,10 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.nysm_latlon = nysm_latlon
         self.y_indices = y_indices
         self.x_indices = x_indices
+        station_mask = np.zeros_like(RTMA_lat, dtype=np.uint8)
+        # Set 1 at the station locations
+        station_mask[y_indices, x_indices] = 1
+        self.station_mask = station_mask
 
         # Pre-select the time range
         ds = xr.open_zarr(zarr_store)[variable]
@@ -26,7 +30,6 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         #print(f"Total samples in the dataset: {len(ds.time)}")
 
         # Filter the valid indices based on ds.time and missing_times
-
         valid_times = ds["time"].where(~ds["time"].isin(missing_times))
         self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]
 
@@ -52,7 +55,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         )
 
         # Combine inputs: interpolated + orography
-        input_tensor = np.stack([interp, self.orography], axis=0)  # shape: [2, y, x]
+        input_tensor = np.stack([interp, self.orography,self.station_mask], axis=0)  # shape: [3, y, x]
 
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
