@@ -30,118 +30,297 @@ def bhwc_to_bchw(input: torch.Tensor) -> torch.Tensor:
     return input.permute(0, 3, 1, 2)
 
 class InputProj(nn.Module):
-    def __init__(self, in_channel=3, out_channel=32, kernel_size=3, stride=1, norm_layer=None,act_layer=nn.LeakyReLU):
+    def __init__(self, in_channels=3, out_channels=32, kernel_size=3, stride=1, norm_layer=None,act_layer=nn.LeakyReLU):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.norm_layer = norm_layer
+        self.act_layer = act_layer
+        # Input projection
         self.proj = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=kernel_size//2),
+            nn.Conv2d(self.in_channels, self.out_channels, self.kernel_size, stride=self.stride, padding=self.kernel_size//2),
             act_layer(inplace=True)
         )
         if norm_layer is not None:
-            self.norm = norm_layer(out_channel)
+            self.norm = norm_layer(self.out_channels)
         else:
             self.norm = None
-        self.in_channel = in_channel
-        self.out_channel = out_channel
 
     def forward(self, x):
-        B, C, H, W = x.shape
-        x = bchw_to_bhwc(self.proj(x))  # B H W C
+        # INput shape is B C H W
+        x = self.proj(x)  # B C H W
+        x = bchw_to_bhwc(x) # B H W C
         if self.norm is not None:
             x = self.norm(x)
-        return x
-
-    def flops(self, H, W):
-        flops = 0
-        # conv
-        flops += H*W*self.in_channel*self.out_channel*3*3
-
-        if self.norm is not None:
-            flops += H*W*self.out_channel 
-        print("Input_proj:{%.2f}"%(flops/1e9))
-        return flops
+        return x # Output shape is B H W C
 
 # Output Projection
 class OutputProj(nn.Module):
-    def __init__(self, in_channel=32, out_channel=3, kernel_size=3, stride=1, norm_layer=None,act_layer=None):
+    def __init__(self, in_channels=32, out_channels=1, kernel_size=3, stride=1, norm_layer=None,act_layer=None):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.norm_layer = norm_layer
+        self.act_layer = act_layer
+        # Output projection
         self.proj = nn.Sequential(
-            nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=kernel_size//2),
+            nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.stride, padding=self.kernel_size//2),
         )
         if act_layer is not None:
             self.proj.add_module(act_layer(inplace=True))
         if norm_layer is not None:
-            self.norm = norm_layer(out_channel)
+            self.norm = norm_layer(self.out_channels)
         else:
             self.norm = None
-        self.in_channel = in_channel
-        self.out_channel = out_channel
 
     def forward(self, x):
-        B, H, W , C = x.shape
-        x = bhwc_to_bchw(x)
-        x = self.proj(x)
+        # Input shape is B H W C
+        x = bhwc_to_bchw(x) # Convert to B C H W
+        x = self.proj(x)    # B C H W
         if self.norm is not None:
             x = self.norm(x)
-        return x
-
-    def flops(self, H, W):
-        flops = 0
-        # conv
-        flops += H*W*self.in_channel*self.out_channel*3*3
-
-        if self.norm is not None:
-            flops += H*W*self.out_channel 
-        print("Output_proj:{%.2f}"%(flops/1e9))
-        return flops
+        return x    # Output shape is B C H W
 
 class DownSample(nn.Module):
     def __init__(self, in_channels,out_channels, kernel_size=4, stride=2, padding = 1):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.downsample = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.downsample = nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.stride, padding=self.padding)
 
     def forward(self, x):
         # Input shape is B H W C
-        # Convert to B C H W
-        x = bhwc_to_bchw(x)
+        x = bhwc_to_bchw(x) # Convert to B C H W
         x = self.downsample(x)
-        x = bchw_to_bhwc(x)
-        # Convert back to B H W C
+        x = bchw_to_bhwc(x) # Convert back to B H W C
         return x    # Output shape is B H W C
 
 class UpSample(nn.Module):
     def __init__(self, in_channels,out_channels, kernel_size=2, stride=2):
         super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
-        self.upsample = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride)
+        self.upsample = nn.ConvTranspose2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.stride)
 
     def forward(self, x):
         # Input shape is B H W C
-        # Convert to B C H W
-        x = bhwc_to_bchw(x)
+        x = bhwc_to_bchw(x) # Convert to B C H W
         x = self.upsample(x)
-        x = bchw_to_bhwc(x)
-        # Convert back to B H W C
+        x = bchw_to_bhwc(x) # Convert back to B H W C
         return x    # Output shape is B H W C
+
+class Encoder(nn.Module):
+    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.C = C
+        self.n_layers = n_layers
+        self.window_sizes = window_sizes
+        self.head_dim = head_dim
+        self.swin_blocks = nn.ModuleList()
+        self.downs = nn.ModuleList()
+
+        for i in range(n_layers):
+            input_resolution = (self.input_resolution[0] // (2**(i)), self.input_resolution[1] // (2**(i)))
+            dim = self.C*(2**i)
+            num_heads = dim // self.head_dim
+            input_channels = self.C*(2**i)
+            out_channels = self.C*(2**(i+1))
+            window_size = self.window_sizes[i]
+            #  Swin transformer block
+            self.swin_blocks.append(nn.Sequential(
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=0,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU),
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=window_size//2,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU)))
+            # Downsample block
+            self.downs.append(DownSample(in_channels=input_channels, out_channels=out_channels))
+
+    def forward(self, x):
+        # Input shape is B H W C
+        skip_connections = []
+        for swin_block, down in zip(self.swin_blocks, self.downs):
+            x = swin_block(x)   # B H W C
+            skip_connections.append(x)
+            x = down(x) # B H W C
+        return x, skip_connections
+
+class Bottleneck(nn.Module):
+    def __init__(self, C, input_resolution, n_layers=4,head_dim=32, window_sizes=[8,8,4,4,2]):
+        super().__init__()
+        self.C = C
+        self.input_resolution = input_resolution
+        self.n_layers = n_layers
+        self.head_dim = head_dim
+        self.window_sizes = window_sizes
+        i = n_layers
+        input_resolution = (self.input_resolution[0] // (2**(i)), self.input_resolution[1] // (2**(i)))
+        dim = self.C*(2**i)
+        num_heads = dim // self.head_dim
+        window_size = self.window_sizes[i]
+        self.bottleneck =  nn.Sequential(
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=0,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU),
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=window_size//2,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU))
+        
+    def forward(self, x):
+        # Input shape is B H W C
+        x = self.bottleneck(x)  # B H W C
+        return x
+
+class Decoder(nn.Module):
+    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.C = C
+        self.n_layers = n_layers
+        self.window_sizes = window_sizes
+        self.head_dim = head_dim
+        self.ups = nn.ModuleList()
+        self.convs = nn.ModuleList()
+        self.swin_blocks = nn.ModuleList()
+
+        for i in range(n_layers-1,-1,-1):
+            input_resolution = (self.input_resolution[0] // (2**(i)), self.input_resolution[1] // (2**(i)))
+            dim = self.C*(2**i)
+            num_heads = dim // self.head_dim
+            input_channels = self.C*(2**(i+1))
+            out_channels = self.C*(2**(i))
+            window_size = self.window_sizes[i]
+            # Up blocks
+            self.ups.append(UpSample(in_channels=input_channels, out_channels=out_channels))
+            # conv blocks
+            self.convs.append(nn.Conv2d(in_channels=input_channels, out_channels=out_channels, kernel_size=1, stride=1, padding=0))
+            #  Swin transformer block
+            self.swin_blocks.append(nn.Sequential(
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=0,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU),
+                SwinTransformerV2Block(
+                dim=dim, 
+                input_resolution=input_resolution,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=window_size//2,
+                qkv_bias=True,
+                attn_drop=0.0,
+                proj_drop=0.0,
+                mlp_ratio=4.0,
+                norm_layer=nn.LayerNorm,
+                act_layer=nn.GELU)))
+
+    def forward(self, x,skip_connections):
+        # Input shape is B H W C
+        for up, conv, swin_block, skip in zip(self.ups, self.convs, self.swin_blocks, skip_connections[::-1]):
+            x = up(x)   # B H W C
+            x = torch.cat((x, skip), dim=-1)    # Concatenate along the channel dimension, that is -c
+            x = bchw_to_bhwc(conv(bhwc_to_bchw(x))) # B H W C
+            x = swin_block(x)
+        return x
+
+class SwinT2UNet(nn.Module):
+    def __init__(self, input_resolution=(256,288), in_channels=3, out_channels=1, C=32, n_layers=4,window_sizes=[8,8,4,4], head_dim=32):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.C = C
+        self.n_layers = n_layers
+        self.window_sizes = window_sizes
+        self.head_dim = head_dim
+        self.input_proj = InputProj(in_channels, C)
+        self.encoder = Encoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
+        self.bottleneck = Bottleneck(C=self.C, input_resolution=self.input_resolution, n_layers=self.n_layers, window_sizes=self.window_sizes, head_dim=self.head_dim)
+        self.decoder = Decoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
+        self.output_proj = OutputProj(in_channels=self.C, out_channels=self.out_channels)
+        
+    def forward(self, x):
+        # Input shape is B C H W
+        x = self.input_proj(x)  # B H W C
+        x, skip_connections = self.encoder(x)  # B H W C
+        x = self.bottleneck(x)  # B H W C
+        x = self.decoder(x, skip_connections)  # B H W C
+        x = self.output_proj(x)  # B C H W
+        return x    # Output shape is B C H W
 
 # %%
 if __name__ == "__main__":
     # Example usage
-    x = torch.randn(1, 3, 256, 288) # (1, C, H, W)
+    input_resolution = (256, 288)
+    in_channels = 3
+    out_channels = 1
+    C = 32
+    n_layers = 4
+    window_sizes = [8, 8, 4, 4, 2]
+    head_dim = 32
+    model = SwinT2UNet(input_resolution=input_resolution, 
+                       in_channels=in_channels, 
+                       out_channels=out_channels, 
+                       C=C, n_layers=n_layers, 
+                       window_sizes=window_sizes,
+                         head_dim=head_dim)
+    # Create a random input tensor
+    x = torch.randn(1, in_channels, input_resolution[0], input_resolution[1])  # (batch_size, channels, height, width)
     print(x.shape)  # Should be (1, 3, 256, 288)
-    output = InputProj(in_channel=3,out_channel=32,kernel_size=3,stride=1)(x)
-    print(output.shape)  # Should be (1, 256, 288, 32)
-    # H and W must be divisible by window_size or appropriately padded, dim must be divisible by num_heads
-    output = SwinTransformerV2Block(dim=32, input_resolution=(256, 288), num_heads=4, window_size=8, shift_size=0)(output)
-    output = SwinTransformerV2Block(dim=32, input_resolution=(256, 288), num_heads=4, window_size=8, shift_size=8//2)(output)
-    print(output.shape)  # Should be (1, 256, 288, 32)
-    output = DownSample(in_channels=32,out_channels=64)(output)
-    print(output.shape)  # Should be (1, 128, 144, 64)
-    output = UpSample(in_channels=64,out_channels=32)(output)
-    print(output.shape)  # Should be (1, 256, 288, 32)
-    output = OutputProj(in_channel=32,out_channel=1)(output)
-    print(output.shape)  # Should be (1, 32, 256, 288)
+    output = model(x)
+    print(output.shape)  # Should be (1, 1, 256, 288)
 # %%
