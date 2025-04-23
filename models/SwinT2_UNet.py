@@ -18,7 +18,7 @@ def bchw_to_bhwc(input: torch.Tensor) -> torch.Tensor:
     :param input: (torch.Tensor) Input tensor of the shape [batch size, channels, height, width]
     :return: (torch.Tensor) Output tensor of the shape [batch size, height, width, channels]
     """
-    return input.permute(0, 2, 3, 1)
+    return input.permute(0, 2, 3, 1).contiguous()
 
 
 def bhwc_to_bchw(input: torch.Tensor) -> torch.Tensor:
@@ -27,7 +27,7 @@ def bhwc_to_bchw(input: torch.Tensor) -> torch.Tensor:
     :param input: (torch.Tensor) Input tensor of the shape [batch size, height, width, channels]
     :return: (torch.Tensor) Output tensor of the shape [batch size, channels, height, width]
     """
-    return input.permute(0, 3, 1, 2)
+    return input.permute(0, 3, 1, 2).contiguous()
 
 class InputProj(nn.Module):
     def __init__(self, in_channels=3, out_channels=32, kernel_size=3, stride=1, norm_layer=None,act_layer=nn.LeakyReLU):
@@ -272,7 +272,7 @@ class Decoder(nn.Module):
         # Input shape is B H W C
         for up, conv, swin_block, skip in zip(self.ups, self.convs, self.swin_blocks, skip_connections[::-1]):
             x = up(x)   # B H W C
-            x = torch.cat((x, skip), dim=-1)    # Concatenate along the channel dimension, that is -c
+            x = torch.cat((x, skip), dim=-1).contiguous()    # Concatenate along the channel dimension, that is -c
             x = bchw_to_bhwc(conv(bhwc_to_bchw(x))) # B H W C
             x = swin_block(x)
         return x

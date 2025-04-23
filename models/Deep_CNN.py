@@ -17,10 +17,11 @@ class DCNN(nn.Module):
     - kernel (tuple): Size of the convolutional kernel.
     - final_kernel (tuple): Size of the final convolutional kernel.
     - n_layers (int): Number of convolutional layers in the network.
+    - hard_enforce_stations (bool): If True, enforces station values in the output. Technically, the output will have station values at the staiton locations.
     Returns:
     - output (Tensor): Output tensor after passing through the network.
     '''
-    def __init__(self, in_channels, out_channels, C=48,kernel=(7,7),final_kernel=(3,3),n_layers=7):
+    def __init__(self, in_channels, out_channels, C=48,kernel=(7,7),final_kernel=(3,3),n_layers=7,hard_enforce_stations=False):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -29,6 +30,7 @@ class DCNN(nn.Module):
         self.final_kernel = final_kernel    
         self.n_layers = n_layers
         self.blocks = nn.ModuleList()
+        self.hard_enforce_stations = hard_enforce_stations
         for i in range(n_layers):
             if i == 0:
                 in_channels = self.in_channels
@@ -43,9 +45,14 @@ class DCNN(nn.Module):
         self.final_conv = nn.Conv2d(C, self.out_channels, kernel_size=self.final_kernel, padding=1)
 
     def forward(self, x):
+        if self.hard_enforce_stations:
+            station_values = x[:, 0, ...].unsqueeze(1)  # [B, 1, H, W]
+            station_mask = x[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
         for block in self.blocks:
             x = block(x)
         x = self.final_conv(x)
+        if self.hard_enforce_stations:
+            x = station_mask * station_values + (1-station_mask)*x
         return x
 # %%
 if __name__ == "__main__":

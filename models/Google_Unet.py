@@ -91,7 +91,7 @@ class Decoder(nn.Module):
 
         return x
 
-class UNet(nn.Module):
+class GoogleUNet(nn.Module):
     def __init__(self, in_channels=1, out_channels=1, feature_channels=[64, 128, 256], dropout_prob=0.1):
         super().__init__()
 
