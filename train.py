@@ -172,10 +172,16 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
             # Always update latest checkpoint
             save_model_checkpoint(model, optimizer, scheduler, epoch, latest_ckpt_path)
 
-        # === Early stopping check ===
+        # === Early stopping check (in ALL ranks, after validation step) ===
         if early_stopping is not None:
-            if early_stopping(avg_val_loss):
-                print(f"Early stopping triggered at epoch {epoch+1}.")
+            stop_flag = torch.tensor(
+                int(early_stopping(avg_val_loss)), device=device, dtype=torch.int
+            )
+            if dist.is_initialized():
+                dist.all_reduce(stop_flag, op=dist.ReduceOp.SUM)
+            if stop_flag.item() > 0:
+                if not dist.is_initialized() or dist.get_rank() == 0:
+                    print(f"Early stopping triggered at epoch {epoch+1}.")
                 break
 
 # === Computing the outputs on test data and saving them to zarr ===
@@ -508,7 +514,7 @@ def main():
                     "scheduler": "ExponentialLR",
                 }
             )
-    
+    '''
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -532,7 +538,7 @@ def main():
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    
+    '''
     # === Run the test and save the outputs to zarr ===
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
