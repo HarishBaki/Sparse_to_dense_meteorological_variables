@@ -57,7 +57,7 @@ class DCNN(nn.Module):
 # %%
 if __name__ == "__main__":
     # Example usage
-    model = DCNN(in_channels=3, out_channels=1, C=48, kernel=(7, 7),final_kernel=(3,3), n_layers=7)
+    model = DCNN(in_channels=3, out_channels=1, C=48, kernel=(7, 7),final_kernel=(3,3), n_layers=7,hard_enforce_stations=True)
     print(model)  # Print the model architecture
     x = torch.randn(1, 3, 256, 288)  
     output = model(x)

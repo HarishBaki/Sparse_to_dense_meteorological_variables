@@ -296,8 +296,9 @@ if __name__ == "__main__":
             print(f"Target ➜ max: {target_tensor[0,0].max().item():.4f}, min: {target_tensor[0,0].min().item():.4f}")
 
             # Inverse transform for input and target
-            input_tensor_inv = input_transform.inverse(input_tensor[0])
-            target_tensor_inv = target_transform.inverse(target_tensor[0])
+            input_tensor_inv = input_transform.inverse(input_tensor[0])     # shape: [3, y, x]
+            target_tensor_inv = target_transform.inverse(target_tensor[0])  # shape: [1, y, x]
+            print("Inverse transformed tensors shapes:", input_tensor_inv.shape, target_tensor_inv.shape)
             for i in range(input_tensor.shape[1]):
                 print(f"Inverse Input Channel 0 ➜ max: {input_tensor_inv[i].max().item():.4f}, min: {input_tensor_inv[i].min().item():.4f}")
             print(f"Inverse Target ➜ max: {target_tensor_inv.max().item():.4f}, min: {target_tensor_inv.min().item():.4f}")

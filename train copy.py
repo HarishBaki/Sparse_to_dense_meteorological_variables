@@ -11,7 +11,6 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 
 import xarray as xr
-import zarr
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
@@ -33,7 +32,7 @@ from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnie
 # %%
 # === Early stopping, and checkpointing functions ===
 class EarlyStopping:
-    def __init__(self, patience=20, min_delta=0.0):
+    def __init__(self, patience=10, min_delta=0.0):
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
@@ -98,7 +97,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
             input_tensor, target_tensor,_ = batch
             # Here you can extract the station values and mask if needed
             input_tensor = input_tensor.to(device, non_blocking=True)   # [B, C, H, W]
-            target_tensor = target_tensor.to(device, non_blocking=True)    # [B, C, H, W]
+            target_tensor = target_tensor.unsqueeze(1).to(device, non_blocking=True)    # [B, C, H, W]
             station_mask = input_tensor[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
 
             optimizer.zero_grad()
@@ -128,7 +127,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
             for batch in val_bar:
                 input_tensor, target_tensor,_ = batch
                 input_tensor = input_tensor.to(device, non_blocking=True)
-                target_tensor = target_tensor.to(device, non_blocking=True)
+                target_tensor = target_tensor.unsqueeze(1).to(device, non_blocking=True)
                 station_mask = input_tensor[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
 
                 output = model(input_tensor)
@@ -158,8 +157,7 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
                 "learning_rate": scheduler.get_last_lr()[0],   # log current LR
             })
 
-        if not dist.is_initialized() or dist.get_rank() == 0:
-            print(f"[Epoch {epoch+1}]  Train Loss: {avg_train_loss:.4f} |  Val Loss: {avg_val_loss:.4f}  | LR: {scheduler.get_last_lr()[0]:.6f}")
+        print(f"[Epoch {epoch+1}]  Train Loss: {avg_train_loss:.4f} |  Val Loss: {avg_val_loss:.4f}  | LR: {scheduler.get_last_lr()[0]:.6f}")
 
         # === Save Checkpoints ===
         if not dist.is_initialized() or dist.get_rank() == 0:
@@ -178,102 +176,14 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
                 print(f"Early stopping triggered at epoch {epoch+1}.")
                 break
 
-# === Computing the outputs on test data and saving them to zarr ===
-def init_zarr_store(zarr_store, dates,variable):
-    orography = xr.open_dataset('orography.nc')
-    orography.attrs = {}
-    template = xr.full_like(orography.orog.expand_dims(time=dates),fill_value=np.nan,dtype='float32')
-    template['time'] = dates
-    template = template.chunk({'time': 24})
-    template = template.transpose('time','y','x')
-    template = template.assign_coords({
-        'latitude': orography.latitude,
-        'longitude': orography.longitude
-    })
-    template.to_dataset(name = variable).to_zarr(zarr_store, compute=False, mode='w')
-
-def run_test(model, test_dataloader, test_dates_range, criterion, metric, device,
-               checkpoint_dir, variable , target_transform=None):
-    # load the best model Handle DDP 'module.' prefix
-    best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
-    checkpoint = torch.load(best_ckpt_path, map_location=device)
-    state_dict = checkpoint["model_state_dict"]
-    model.load_state_dict(state_dict)
-
-    # === Creating a zarr for test data ===
-    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
-    zarr_store = os.path.join(checkpoint_dir, "RTMA_test.zarr")
-    if not dist.is_initialized() or dist.get_rank() == 0:   # Initialize only on rank 0 and wait for others
-        init_zarr_store(zarr_store, dates, variable)
-        print(f"Zarr store initialized at {zarr_store}.")
-    if dist.is_initialized():
-        dist.barrier()  # All other ranks wait here until rank 0 finishes
-
-    # === Step 2: Evaluate and write predictions using matched time indices ===
-    ds = xr.open_zarr(zarr_store, consolidated=False)
-    zarr_time = ds['time'].values  # dtype=datetime64[ns]
-    time_to_idx = {t: i for i, t in enumerate(zarr_time)}
-
-    # Use low-level Zarr for writing directly
-    zarr_write = zarr.open(zarr_store, mode='a')
-    zarr_variable = zarr_write[variable]
-
-    # === testing and saving into test zarr===
-    model.eval()
-    test_loss_total = 0.0
-    test_metric_total = 0.0
-    show_progress = not dist.is_initialized() or dist.get_rank() == 0
-    test_bar = tqdm(test_dataloader, desc=f"[Test]", leave=False) if show_progress else test_dataloader
-    with torch.no_grad():
-        for batch in test_bar:
-            input_tensor, target_tensor, time_value = batch
-            input_tensor = input_tensor.to(device, non_blocking=True)
-            target_tensor = target_tensor.to(device, non_blocking=True)
-            station_mask = input_tensor[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
-
-            output = model(input_tensor)    # [B, 1, H, W]
-
-            # Compute the loss
-            loss = criterion(output, target_tensor,station_mask)
-            test_loss_total += loss.item()
-
-            # Compute the metric
-            metric_value = metric(output, target_tensor, station_mask)
-            test_metric_total += metric_value.item()
-
-            if show_progress:
-                test_bar.set_postfix(loss=loss.item(), metric=metric_value.item())
-
-            # create an xarray dataset from the output
-            output_np = output.cpu().numpy()    # [B, 1, H, W]
-            time_np = np.array(time_value, dtype='datetime64[ns]')
-
-            # Match and write to correct time indices
-            for i, t in enumerate(time_np):
-                idx = time_to_idx.get(t)
-                if idx is not None:
-                    # inverse transform the output if needed
-                    if target_transform is not None:
-                        output_np[i] = (target_transform.inverse(output_np[i])).squeeze(0)
-                    # Write to zarr
-                    zarr_variable[idx] = (output_np[i]).squeeze(0)
-                else:
-                    print(f"Warning: Time {t} not found in time axis.")
-        
-    avg_test_loss = test_loss_total / len(test_dataloader)
-    avg_test_metric = test_metric_total / len(test_dataloader)
-    print(f"Test Loss: {avg_test_loss:.4f} | Test Metric: {avg_test_metric:.4f}")
-    
-    # Log the test loss and metric to Weights & Biases
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
-
 def main():
     # === Argparse and DDP setup ===
     parser = argparse.ArgumentParser(description="Train with DDP")
 
-    parser.add_argument("--variable", type=str, default="i10fg", 
-                        help="Variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+    parser.add_argument("--input_variables", type=str, default="i10fg", 
+                        help="Input variables to train on seperated by comma ('i10fg,d2m,t2m,si10,sh2,sp')")
+    parser.add_argument("--target_variable", type=str, default="i10fg",
+                        help="Target variables to train on ('i10fg', 'd2m', 't2m', 'si10', 'sh2', 'sp')")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--resume", action="store_true", 
                         help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
@@ -283,30 +193,29 @@ def main():
     parser.add_argument("--model", type=str, default="DCNN", 
                         help="Model architecture to use ('DCNN', 'GoogleUNet', 'UNet', 'SwinT2UNet')")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
-    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
     parser.add_argument("--transform", type=str, default="none", 
                         help="Transform to apply to the data ('none', 'minmax', 'standard')")
     parser.add_argument("--train_years_range", type=str, default="2018,2021",
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
-    parser.add_argument("--wandb_id", type=str, default=None, help="WandB run ID for resuming, not passing will create a new run")
 
     args = parser.parse_args()
-    variable = args.variable
+    input_variables = [x.strip() for x in args.input_variables.split(",")]  # a list of input variables
+    input_variables_str = ",".join(input_variables)
+    target_variable = variable = args.target_variable.strip()  # single variable, always strip!
     num_epochs = args.epochs
     resume = args.resume
     loss_name = args.loss
     model_name = args.model
     batch_size = args.batch_size
-    num_workers = args.num_workers
     transform = args.transform
     # Parse the input string into a list of years
     years = args.train_years_range.split(",")
     if len(years) == 1:
         start_year = end_year = years[0].strip()
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year
+        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+input_variables_str+'/'+model_name+'/'+loss_name+'/'+start_year
     else:
         start_year, end_year = [y.strip() for y in years[:2]]
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year
+        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+input_variables_str+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year
     # Compose the date strings for slicing
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']    
 
@@ -349,11 +258,22 @@ def main():
     # === Loading the RTMA data ===
     zarr_store = 'data/RTMA.zarr'
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
-    missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
+    test_dates_range = ['2023-01-01T00', '2023-12-31T23']
+    if len (input_variables) > 1:       
+        all_missing_times = []
+        for var in input_variables:
+            miss_times = xr.open_dataset(f'nan_times_{var}.nc').time.values
+            all_missing_times.append(miss_times)
+        # Concatenate and get unique, sorted union
+        all_times = np.concatenate(all_missing_times)
+        missing_times = np.unique(all_times)  # Sorted, deduplicated
+    else:
+        missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time.values
+    print(f"Missing times: {missing_times}")
 
     # Read stats of RTMA data
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
-    input_variables_in_order = [variable,'orography']  # modify this to match when we work on multiple variabls as input
+    input_variables_in_order = input_variables + ['orography']  # modify this to match when we work on multiple variabls as input
     target_variables_in_order = [variable]
     input_stats = RTMA_stats.sel(variable=input_variables_in_order)
     target_stats = RTMA_stats.sel(variable=target_variables_in_order)
@@ -394,7 +314,7 @@ def main():
         sampler=train_sampler,
         shuffle=False,
         pin_memory=True,
-        num_workers=num_workers
+        num_workers=batch_size
     )
     validation_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
@@ -418,121 +338,8 @@ def main():
         shuffle=False,
         sampler=validation_sampler,
         pin_memory=True,
-        num_workers=num_workers
+        num_workers=batch_size
     )
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Data loaded successfully.")
-        print(f"Train dataset size: {len(train_dataset)}")
-        print(f"Validation dataset size: {len(validation_dataset)}")
-
-    # %%
-    # === Set up device, model, loss, optimizer ===
-    input_resolution = (orography.shape[0], orography.shape[1])
-    in_channels = 3
-    out_channels = 1
-    if model_name == "DCNN":
-        C = 48
-        kernel = (7, 7)
-        final_kernel = (3, 3)
-        n_layers = 7
-        model = DCNN(in_channels=in_channels, 
-                     out_channels=out_channels, 
-                     C=C, 
-                     kernel=kernel,
-                       final_kernel=final_kernel, 
-                       n_layers=n_layers,
-                       hard_enforce_stations=True).to(device)
-    elif model_name == "UNet":
-        C = 32
-        n_layers = 4
-        model = UNet(in_channels=in_channels, 
-                     out_channels=out_channels,
-                     C=C, 
-                     n_layers=n_layers,
-                     hard_enforce_stations=True).to(device)
-    elif model_name == "SwinT2UNet":
-        C = 32
-        n_layers = 4
-        window_sizes = [8, 8, 4, 4, 2]
-        head_dim = 32
-        model = SwinT2UNet(input_resolution=input_resolution, 
-                       in_channels=in_channels, 
-                       out_channels=out_channels, 
-                       C=C, n_layers=n_layers, 
-                       window_sizes=window_sizes,
-                         head_dim=head_dim,
-                         hard_enforce_stations=True).to(device)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
-
-    # Define the loss criterion and metric here, based on input loss name. The functions are sent to the GPU inside
-    if loss_name == "MaskedMSELoss":
-        criterion = MaskedMSELoss(mask_tensor)
-    elif loss_name == "MaskedRMSELoss":
-        criterion = MaskedRMSELoss(mask_tensor)
-    elif loss_name == "MaskedTVLoss":
-        criterion = MaskedTVLoss(mask_tensor,tv_loss_weight=0.001, beta=0.5)    
-    elif loss_name == "MaskedCharbonnierLoss":
-        criterion = MaskedCharbonnierLoss(mask_tensor,eps=1e-3)
-    metric = MaskedRMSELoss(mask_tensor)
-
-    # === Optimizer, scheduler, and early stopping ===
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler = ExponentialLR(optimizer, gamma=0.9)
-    early_stopping = EarlyStopping(patience=20, min_delta=0.0)
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Model created and moved to device.")
-
-    # === Initializing the wandb ===
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        if args.wandb_id is not None:
-            wandb.init(
-                project="sparse-to-dense-RTMA",id=args.wandb_id,resume='allow',
-            )
-        else:
-            wandb.init(
-                project="sparse-to-dense-RTMA",
-                name=f"{variable}_{model_name}_{loss_name}",
-                config={
-                    "variable": variable,
-                    "model": model_name,
-                    "optimizer": "Adam",
-                    "lr": optimizer.param_groups[0]["lr"],
-                    "loss_fn": loss_name,
-                    "metric": "MaskedRMSELoss",      # or set from args if you add support
-                    "epochs": num_epochs,
-                    "batch_size": batch_size,
-                    "transform": transform,
-                    "train_dates_range": train_dates_range,
-                    "scheduler": "ExponentialLR",
-                }
-            )
-    
-    # === Run the training and validation ===
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Starting training and validation...")
-    run_epochs(
-        model=model,
-        train_dataloader=train_dataloader,
-        val_dataloader=validation_dataloader,
-        optimizer=optimizer,
-        criterion=criterion,
-        metric=metric,
-        device=device,
-        num_epochs=num_epochs,
-        checkpoint_dir=checkpoint_dir,
-        train_sampler=train_sampler, 
-        scheduler=scheduler,
-        early_stopping=early_stopping,
-        resume=resume
-    )
-    # === Barrier to ensure all ranks wait for checkpoint ===
-    if dist.is_initialized():
-        dist.barrier()
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Training and validation completed.")
-    
-    # === Run the test and save the outputs to zarr ===
-    test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         variable,
@@ -555,31 +362,101 @@ def main():
         shuffle=False,
         sampler=test_sampler,
         pin_memory=True,
-        num_workers=num_workers
+        num_workers=batch_size
     )
     if not dist.is_initialized() or dist.get_rank() == 0:
-         print("Test data loaded successfully.")
-         print(f"Test dataset size: {len(test_dataset)}")
+        print("Data loaded successfully.")
+        print(f"Train dataset size: {len(train_dataset)}")
+        print(f"Validation dataset size: {len(validation_dataset)}")
+        print(f"Test dataset size: {len(test_dataset)}")
 
+    # %%
+    # === Set up device, model, loss, optimizer ===
+    input_resolution = (orography.shape[0], orography.shape[1])
+    in_channels = 3
+    out_channels = 1
+    if model_name == "DCNN":
+        C = 48
+        kernel = (7, 7)
+        final_kernel = (3, 3)
+        n_layers = 7
+        model = DCNN(in_channels=in_channels, out_channels=out_channels, C=C, kernel=kernel, final_kernel=final_kernel, n_layers=n_layers).to(device)
+    elif model_name == "UNet":
+        C = 32
+        n_layers = 4
+        model = UNet(in_channels=in_channels, out_channels=out_channels,C=C, n_layers=n_layers).to(device)
+    elif model_name == "SwinT2UNet":
+        C = 32
+        n_layers = 4
+        window_sizes = [8, 8, 4, 4, 2]
+        head_dim = 32
+        model = SwinT2UNet(input_resolution=input_resolution, 
+                       in_channels=in_channels, 
+                       out_channels=out_channels, 
+                       C=C, n_layers=n_layers, 
+                       window_sizes=window_sizes,
+                         head_dim=head_dim).to(device)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
+
+    # Define the loss criterion and metric here, based on input loss name. The functions are sent to the GPU inside
+    if loss_name == "MaskedMSELoss":
+        criterion = MaskedMSELoss(mask_tensor)
+    elif loss_name == "MaskedRMSELoss":
+        criterion = MaskedRMSELoss(mask_tensor)
+    elif loss_name == "MaskedTVLoss":
+        criterion = MaskedTVLoss(mask_tensor,tv_loss_weight=0.001, beta=0.5)    
+    elif loss_name == "MaskedCharbonnierLoss":
+        criterion = MaskedCharbonnierLoss(mask_tensor,eps=1e-3)
+    metric = MaskedRMSELoss(mask_tensor)
+
+    # === Optimizer, scheduler, and early stopping ===
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    scheduler = ExponentialLR(optimizer, gamma=0.9)
+    early_stopping = EarlyStopping(patience=10, min_delta=0.0)
+    print("Model created and moved to device.")
+
+    # === Initializing the wandb ===
     if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Starting Testing...")
-    run_test(
-        model = model, 
-        test_dataloader = test_dataloader,
-        test_dates_range = test_dates_range,
-        criterion = criterion,
-        metric = metric,
-        device = device,
-        checkpoint_dir = checkpoint_dir,
-        variable = variable, 
-        target_transform = target_transform
+        wandb.init(
+            project="sparse-to-dense-RTMA",
+            name=f"{variable}_{model_name}_{loss_name}",
+            config={
+                "variable": variable,
+                "model": model_name,
+                "optimizer": "Adam",
+                "lr": optimizer.param_groups[0]["lr"],
+                "loss_fn": loss_name,
+                "metric": "MaskedRMSELoss",      # or set from args if you add support
+                "epochs": num_epochs,
+                "batch_size": batch_size,
+                "transform": transform,
+                "train_dates_range": train_dates_range,
+                "scheduler": "ExponentialLR",
+            }
+        )
+
+    # === Run the training and validation ===
+    print("Starting training and validation...")
+    run_epochs(
+        model=model,
+        train_dataloader=train_dataloader,
+        val_dataloader=validation_dataloader,
+        optimizer=optimizer,
+        criterion=criterion,
+        metric=metric,
+        device=device,
+        num_epochs=num_epochs,
+        checkpoint_dir=checkpoint_dir,
+        train_sampler=train_sampler, 
+        scheduler=scheduler,
+        early_stopping=early_stopping,
+        resume=resume
     )
 
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
     if dist.is_initialized():
-        dist.barrier()
         dist.destroy_process_group()
 
 # %%

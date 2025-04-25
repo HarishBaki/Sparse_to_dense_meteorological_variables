@@ -105,28 +105,37 @@ class UNet(nn.Module):
     - C (int): Number of channels (or) dimensions in the intermediate layers.
     - n_layers (int): Number of convolutional layers in the network.
     - kernel (tuple): Size of the convolutional kernel. We used 3*3 kernel.
+    - hard_enforce_stations (bool): If True, enforces station values in the output. Technically, the output will have station values at the staiton locations.
     Returns:
     - output (Tensor): Output tensor after passing through the network.
     The entire architectue is based on the paper "Uformer: A General U-Shaped Transformer for Image Restoration"
     The corresponding code is available at "https://github.com/ZhendongWang6/Uformer"
     In the encoder, the Channels will double after each ConvBlock, while the spatial dimensions will be halved after each downsampling layer.
     In the decoder, the spatial dimensions will be doubled after each upsampling layer, then the channels will double by concatnation, while the channels will be halved after each ConvBlock.
+
     '''
-    def __init__(self, in_channels=3, out_channels=1, C=32, n_layers=4):
+    def __init__(self, in_channels=3, out_channels=1, C=32, n_layers=4,hard_enforce_stations=False):
         super(UNet, self).__init__()
+        self.hard_enforce_stations = hard_enforce_stations
         self.encoder = Encoder(in_channels, C, n_layers)
         self.bottleneck = Bottleneck(C, n_layers)
         self.decoder = Decoder(out_channels, C, n_layers)
 
     def forward(self, x):
+        if self.hard_enforce_stations:
+            station_values = x[:, 0, ...].unsqueeze(1)  # [B, 1, H, W]
+            station_mask = x[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
         x, skip_connections = self.encoder(x)
         x = self.bottleneck(x)
         x = self.decoder(x, skip_connections)
+        if self.hard_enforce_stations:
+            x = station_mask * station_values + (1-station_mask)*x
         return x
     
 # %%    
 if __name__ == "__main__":
-    model = UNet(in_channels=3, out_channels=1, C=32, n_layers=4)
+    model = UNet(in_channels=3, out_channels=1, C=32, n_layers=4,hard_enforce_stations=True)
+    print(model)
     x = torch.randn(1, 3, 256, 288)  # Example input
     output = model(x)
     print("Output shape:", output.shape)  # Should be (1, 1, 256, 256)

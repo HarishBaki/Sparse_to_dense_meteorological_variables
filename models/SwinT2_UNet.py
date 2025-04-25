@@ -278,7 +278,21 @@ class Decoder(nn.Module):
         return x
 
 class SwinT2UNet(nn.Module):
-    def __init__(self, input_resolution=(256,288), in_channels=3, out_channels=1, C=32, n_layers=4,window_sizes=[8,8,4,4], head_dim=32):
+    '''
+    Swin Transformer V2 UNet
+    This architecture is implemented followed by the paper "Swin Transformer V2: Scaling Up Capacity and Resolution"
+    Parameters:
+    - input_resolution (tuple): Input resolution of the image.
+    - in_channels (int): Number of input channels.
+    - out_channels (int): Number of output channels.
+    - C (int): Number of channels in the intermediate layers.
+    - n_layers (int): Number of layers in the encoder and decoder.
+    - window_sizes (list): List of window sizes for each layer.
+    - head_dim (int): Dimension of each head in the multi-head attention.
+    - hard_enforce_stations (bool): If True, enforces station values in the output. Technically, the output will have station values at the station locations.
+    '''
+
+    def __init__(self, input_resolution=(256,288), in_channels=3, out_channels=1, C=32, n_layers=4,window_sizes=[8,8,4,4], head_dim=32,hard_enforce_stations=False):
         super().__init__()
         self.input_resolution = input_resolution
         self.in_channels = in_channels
@@ -288,6 +302,7 @@ class SwinT2UNet(nn.Module):
         self.window_sizes = window_sizes
         self.head_dim = head_dim
         self.input_proj = InputProj(in_channels, C)
+        self.hard_enforce_stations = hard_enforce_stations
         self.encoder = Encoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
         self.bottleneck = Bottleneck(C=self.C, input_resolution=self.input_resolution, n_layers=self.n_layers, window_sizes=self.window_sizes, head_dim=self.head_dim)
         self.decoder = Decoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
@@ -295,11 +310,16 @@ class SwinT2UNet(nn.Module):
         
     def forward(self, x):
         # Input shape is B C H W
+        if self.hard_enforce_stations:
+            station_values = x[:, 0, ...].unsqueeze(1)  # [B, 1, H, W]
+            station_mask = x[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
         x = self.input_proj(x)  # B H W C
         x, skip_connections = self.encoder(x)  # B H W C
         x = self.bottleneck(x)  # B H W C
         x = self.decoder(x, skip_connections)  # B H W C
         x = self.output_proj(x)  # B C H W
+        if self.hard_enforce_stations:
+            x = station_mask * station_values + (1-station_mask)*x
         return x    # Output shape is B C H W
 
 # %%
@@ -317,7 +337,9 @@ if __name__ == "__main__":
                        out_channels=out_channels, 
                        C=C, n_layers=n_layers, 
                        window_sizes=window_sizes,
-                         head_dim=head_dim)
+                         head_dim=head_dim,
+                         hard_enforce_stations=True)
+    print(model)  # Print the model architecture
     # Create a random input tensor
     x = torch.randn(1, in_channels, input_resolution[0], input_resolution[1])  # (batch_size, channels, height, width)
     print(x.shape)  # Should be (1, 3, 256, 288)
