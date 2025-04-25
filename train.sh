@@ -21,6 +21,6 @@ torchrun --nproc_per_node=$nproc_per_node train.py \
 --loss $loss \
 --transform $transform \
 --train_years_range $train_years_range \
---num_workers $num_workers \
+--num_workers $num_workers
 --wandb_id $wandb_id
 --resume
