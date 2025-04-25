@@ -303,10 +303,10 @@ def main():
     years = args.train_years_range.split(",")
     if len(years) == 1:
         start_year = end_year = years[0].strip()
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year
+        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'/'+transform
     else:
         start_year, end_year = [y.strip() for y in years[:2]]
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year
+        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year+'/'+transform
     # Compose the date strings for slicing
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']    
 
@@ -394,7 +394,8 @@ def main():
         sampler=train_sampler,
         shuffle=False,
         pin_memory=True,
-        num_workers=num_workers
+        num_workers=num_workers,
+        drop_last=True
     )
     validation_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
@@ -418,7 +419,8 @@ def main():
         shuffle=False,
         sampler=validation_sampler,
         pin_memory=True,
-        num_workers=num_workers
+        num_workers=num_workers,
+        drop_last=True
     )
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Data loaded successfully.")
