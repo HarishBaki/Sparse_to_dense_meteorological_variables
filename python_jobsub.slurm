@@ -25,9 +25,9 @@ variable='i10fg'
 epochs=120
 checkpoint_dir='checkpoints'
 loss='MaskedCharbonnierLoss'
-model='UNet' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
+model='DCNN' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
-transform='standard'
+transform='minmax'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'
 #wandb_id='v43gryq7'
 
