@@ -17,6 +17,7 @@
 # Optionally pass SLURM values into the shell script as environment variables
 export nproc_per_node=${SLURM_NTASKS_PER_NODE}
 export num_workers=${SLURM_CPUS_PER_TASK}
+export MASTER_PORT=$((20000 + RANDOM % 20000))
 
 # Call the actual training script
 nproc_per_node=${nproc_per_node:-2}
@@ -31,7 +32,7 @@ transform='standard'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'
 #wandb_id='x3ft1mi4'
 
-torchrun --nproc_per_node=$nproc_per_node train.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --variable $variable \
 --epochs $epochs \
 --checkpoint_dir $checkpoint_dir \
