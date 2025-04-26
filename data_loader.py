@@ -15,7 +15,9 @@ class Transform:
         stats: 
             if mode == 'standard': {'mean': [...], 'std': [...]}
             if mode == 'minmax': {'min': [...], 'max': [...]}
-        channel_indices: list of channel indices to apply transform to (default: all)
+        channel_indices: list of channel indices to apply transform to. 
+        If tranforming input channels, then the channel_indices will be [0,1] if only working with one variable + orography, otherwise it will be [0,1,2,...]
+        If transforming target channels, then the channel_indices will be [0] always.
         """
         self.mode = mode
         self.channel_indices = channel_indices
@@ -54,38 +56,37 @@ class Transform:
 
 
 class RTMA_sparse_to_dense_Dataset(Dataset):
-    '''
-    Custom dataset class for loading RTMA data.
-    This dataset is designed to work with the RTMA data stored in Zarr format.
-    Parameters:
-    - zarr_store (str): Path to the Zarr store containing RTMA data.
-    - variable (str): Name of the variable to load from the Zarr store.
-    - dates_range (list): List containing start and end dates for filtering the data.
-    - orography (ndarray): Orography data for the region.
-    - RTMA_lat (ndarray): Latitude values for the RTMA grid.
-    - RTMA_lon (ndarray): Longitude values for the RTMA grid.
-    - nysm_latlon (ndarray): Latitude and longitude values for the NYSM stations.
-    - y_indices (ndarray): Y indices of the NYSM stations in the RTMA grid.
-    - x_indices (ndarray): X indices of the NYSM stations in the RTMA grid.
-    - mask (ndarray): Mask for the RTMA grid.
-    - missing_times (ndarray): Array of missing times in the dataset.
-    Returns:
-    - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
-    - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
-    - time_instance (str): Time instance of the data sample.
-    '''
-
-    def __init__(self, zarr_store,variable, dates_range, orography, 
+    def __init__(self, zarr_store,input_variables_in_order, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
                  x_indices,mask,missing_times,input_transform=None,target_transform=None):
+        '''
+        Custom dataset class for loading RTMA data.
+        This dataset is designed to work with the RTMA data stored in Zarr format.
+        Parameters:
+        - zarr_store (str): Path to the Zarr store containing RTMA data.
+        - input_variables_in_order (list): Names of the variables to load from the Zarr store, in which the first one itself is the target. even for a single variable, it should be a list of length 1.
+        - dates_range (list): List containing start and end dates for filtering the data.
+        - orography (ndarray): Orography data for the region.
+        - RTMA_lat (ndarray): Latitude values for the RTMA grid.
+        - RTMA_lon (ndarray): Longitude values for the RTMA grid.
+        - nysm_latlon (ndarray): Latitude and longitude values for the NYSM stations.
+        - y_indices (ndarray): Y indices of the NYSM stations in the RTMA grid.
+        - x_indices (ndarray): X indices of the NYSM stations in the RTMA grid.
+        - mask (ndarray): Mask for the RTMA grid.
+        - missing_times (ndarray): Array of missing times in the dataset.
+        Returns:
+        - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
+        - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
+        - time_instance (str): Time instance of the data sample.
+        '''
         self.input_transform = input_transform
         self.target_transform = target_transform
         self.zarr_store = zarr_store
-        self.variable = variable
+        self.input_variables_in_order = input_variables_in_order
         self.dates_range = dates_range
         self.RTMA_lat = RTMA_lat
         self.RTMA_lon = RTMA_lon
-        self.orography = orography
+        self.orography = np.expand_dims(orography, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
         self.mask = mask
         self.nysm_latlon = nysm_latlon
         self.y_indices = y_indices
@@ -93,16 +94,16 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         station_mask = np.zeros_like(RTMA_lat, dtype=np.uint8)
         # Set 1 at the station locations
         station_mask[y_indices, x_indices] = 1
-        self.station_mask = station_mask
+        self.station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
 
         # Pre-select the time range
-        ds = xr.open_zarr(zarr_store)[variable]
+        ds = xr.open_zarr(zarr_store)[input_variables_in_order] # this is needed, since we might be working with order of variables. 
         ds = ds.sel(time=slice(dates_range[0], dates_range[1]))
         #print(f"Total samples in the dataset: {len(ds.time)}")
 
         # Filter the valid indices based on ds.time and missing_times
         valid_times = ds["time"].where(~ds["time"].isin(missing_times))
-        self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]
+        self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]    # valid_indices are the actual indices in ds, but omitted the missing times
 
         #print(f"Total valid samples: {len(self.valid_indices)}")
         self.ds = ds
@@ -112,25 +113,29 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
 
     def __getitem__(self, idx):
         real_idx = self.valid_indices[idx]
-        output = self.ds.isel(time=real_idx)
+        target = self.ds[self.input_variables_in_order[0]].isel(time=real_idx)    # an xarray DataArray, shape: [ y, x]. Can access the values directly.
+        input = self.ds[self.input_variables_in_order].isel(time=real_idx)  # an xarray Dataset, shape: [ y, x] with number of input variables. Cannot directly extract the values. 
 
-        # Grab station values from output
-        station_values = output.values[self.y_indices, self.x_indices]
-
-        # Interpolate station values to full grid
-        interp = griddata(
-            self.nysm_latlon,
-            station_values,
-            (self.RTMA_lat, self.RTMA_lon),
-            method='nearest'
-        )
-
+        # Grab station values from input for all input variables
+        inputs_interp = []
+        for i, var in enumerate(self.input_variables_in_order):
+            station_values = input[var].values[self.y_indices, self.x_indices]
+            # Interpolate station values to full grid
+            interp = griddata(
+                self.nysm_latlon,
+                station_values,
+                (self.RTMA_lat, self.RTMA_lon),
+                method='nearest'
+            )
+            inputs_interp.append(interp)
+        # Stack the interpolated inputs
+        interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
+        
         # Combine inputs: interpolated + orography
-        input_tensor = np.stack([interp, self.orography,self.station_mask], axis=0)  # shape: [3, y, x]
-
+        input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
-        target_tensor = np.where(self.mask, output.values, 0)
+        target_tensor = np.where(self.mask, target.values, 0)
 
         # Convert to torch tensors
         input_tensor = torch.tensor(input_tensor, dtype=torch.float32)
@@ -143,7 +148,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             target_tensor = self.target_transform(target_tensor)
 
         # Return input and target tensors
-        return input_tensor, target_tensor, str(output.time.values)
+        return input_tensor, target_tensor, str(target.time.values)
 
 # %%
 if __name__ == "__main__":
@@ -186,24 +191,30 @@ if __name__ == "__main__":
     print(f"Missing times shape: {missing_times.shape}")
 
     # Read stats of RTMA data
+    '''
+    A key point, the stats are designed to extract based on variable names, in braces. Even a single variable name is treated as a list of length 1.
+    While, the Transform class is designed to extract based on the channel indices. For target, it will be [0].
+    On the other hand, the RTMA_sparse_to_dense_Dataset class is designed to work with variable names, such that the first variable is the target variable. 
+    '''
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
-    input_variables_in_order = [variable,'orography'] if additional_input_variables is None else [variable]+additional_input_variables+['orography']  
+    input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order)     
-    input_channnel_indices = list(range(len(input_variables_in_order)))
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography'])     
+    input_channnel_indices = list(range(len(input_variables_in_order+['orography'])))
     target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
     target_channnel_indices = list(range(len(target_variables_in_order)))
     # Standardization
     input_transform = Transform(
-        mode="minmax",  # 'standard' or 'minmax'
+        mode="standard",  # 'standard' or 'minmax'
         stats=input_stats,
         channel_indices=input_channnel_indices
     )
     target_transform = Transform(
-        mode="minmax",  # 'standard' or 'minmax'
+        mode="standard",  # 'standard' or 'minmax'
         stats=target_stats,
         channel_indices=target_channnel_indices
     )
+
     # %%
     # Examining the batches without transformations
     # compute time taken call dataset
@@ -211,7 +222,7 @@ if __name__ == "__main__":
     # Create dataset instance
     dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
-        variable,
+        input_variables_in_order,
         dates_range,
         orography,
         RTMA_lat,
@@ -264,7 +275,7 @@ if __name__ == "__main__":
     # Create dataset instance
     dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
-        variable,
+        input_variables_in_order,
         dates_range,
         orography,
         RTMA_lat,
@@ -318,4 +329,4 @@ if __name__ == "__main__":
         
         end_time = time.time()
         print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
-# %%
+    # %%
