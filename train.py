@@ -279,7 +279,9 @@ def main():
     parser = argparse.ArgumentParser(description="Train with DDP")
 
     parser.add_argument("--variable", type=str, default="i10fg", 
-                        help="Variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+                        help="Target variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+    parser.add_argument("--additional_input_variables", type=str, default=None, 
+                        help="Additional input variables to train on seperated by comma ('d2m,t2m,si10,sh2,sp')")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--resume", action="store_true", 
                         help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
@@ -313,6 +315,14 @@ def main():
     else:
         start_year, end_year = [y.strip() for y in years[:2]]
         checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year+'/'+transform
+    
+    if args.additional_input_variables is not None:
+        checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","_")
+
+    additional_input_variables = args.additional_input_variables
+    if additional_input_variables is not None:
+        additional_input_variables = [v.strip() for v in additional_input_variables.split(",")]
+    
     # Compose the date strings for slicing
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']    
 
@@ -325,6 +335,23 @@ def main():
 
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
+
+    # ==== Print the parsed and converted arguments along with the device ====
+    print(
+    f"Args:\n"
+    f"  variable: {variable}\n"
+    f"  num_epochs: {num_epochs}\n"
+    f"  resume: {resume}\n"
+    f"  loss_name: {loss_name}\n"
+    f"  model_name: {model_name}\n"
+    f"  batch_size: {batch_size}\n"
+    f"  num_workers: {num_workers}\n"
+    f"  transform: {transform}\n"
+    f"  train_dates_range: {train_dates_range}\n"
+    f"  wandb_id: {args.wandb_id}\n"
+    f"  checkpoint_dir: {checkpoint_dir}\n"
+    f"  device: {device}"
+    )
 
     # %%
     # === Loading some topography and masking data ===
@@ -356,28 +383,43 @@ def main():
     zarr_store = 'data/RTMA.zarr'
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
-
+    # if the additional input variables is not none, add the missing times of the additional input variables also. 
+    if additional_input_variables is not None:
+        for var in additional_input_variables:
+            missing_times = xr.concat([missing_times, xr.open_dataset(f'nan_times_{var}.nc').time], dim='time')
+        # remove duplicates
+        missing_times = missing_times.drop_duplicates('time')
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        print(f"Missing times shape: {missing_times.shape}")
+    
     # Read stats of RTMA data
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
-    input_variables_in_order = [variable,'orography']  # modify this to match when we work on multiple variabls as input
+    input_variables_in_order = [variable,'orography'] if additional_input_variables is None else [variable]+additional_input_variables+['orography']  
     target_variables_in_order = [variable]
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order)
-    target_stats = RTMA_stats.sel(variable=target_variables_in_order)
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order)     
+    input_channnel_indices = list(range(len(input_variables_in_order)))
+    target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
+    target_channnel_indices = list(range(len(target_variables_in_order)))
+    
+    if not dist.is_initialized() or dist.get_rank() == 0:  
+        print(f"Input stats: {input_stats}", input_channnel_indices)
+        print(f"Target stats: {target_stats}", target_channnel_indices)
+    
     if transform.lower() == 'none':
         input_transform = None
         target_transform = None
     else:
         input_transform = Transform(
             mode=transform.lower(),  # 'standard' or 'minmax'
-            stats=input_stats,
-            channel_indices=[0, 1]
+            stats=input_stats,  # So, no need to pass the channel indices, since the transformation will happen on channels from 0 to -1 
+            channel_indices=input_channnel_indices
         )
         target_transform = Transform(
             mode=transform.lower(),  # 'standard' or 'minmax'
             stats=target_stats,
-            channel_indices=[0]
+            channel_indices=target_channnel_indices
         )
-
+    '''
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         variable,
@@ -514,7 +556,7 @@ def main():
                     "scheduler": "ExponentialLR",
                 }
             )
-    '''
+    
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -538,7 +580,7 @@ def main():
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    '''
+    ''
     # === Run the test and save the outputs to zarr ===
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
@@ -589,7 +631,7 @@ def main():
     if dist.is_initialized():
         dist.barrier()
         dist.destroy_process_group()
-
+    '''
 # %%
 if __name__ == "__main__":
     '''

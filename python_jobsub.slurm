@@ -21,7 +21,7 @@ export num_workers=${SLURM_CPUS_PER_TASK}
 # Call the actual training script
 nproc_per_node=${nproc_per_node:-2}
 num_workers=${num_workers:-32}
-variable='sh2'    #'i10fg','d2m','t2m','si10','sh2','sp'
+variable='i10fg'    #'i10fg','d2m','t2m','si10','sh2','sp'
 epochs=120
 checkpoint_dir='checkpoints'
 loss='MaskedCharbonnierLoss'
@@ -30,6 +30,7 @@ batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'
 #wandb_id='x3ft1mi4'
+additional_input_variables='t2m,d2m,sh2,si10'
 
 torchrun --nproc_per_node=$nproc_per_node train.py \
 --variable $variable \
@@ -40,6 +41,7 @@ torchrun --nproc_per_node=$nproc_per_node train.py \
 --loss $loss \
 --transform $transform \
 --train_years_range $train_years_range \
---num_workers $num_workers 
+--num_workers $num_workers \
+--additional_input_variables $additional_input_variables 
 #--wandb_id $wandb_id 
 #--resume

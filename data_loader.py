@@ -172,27 +172,37 @@ if __name__ == "__main__":
     # Convert flat indices to 2D (y, x)
     y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
 
-    zarr_store = 'data/RTMA_test.zarr'
+    zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
+    additional_input_variables = ['t2m','d2m','si10','sh2']
     dates_range = ['2023-11-09T06','2023-11-09T07']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
+    # if the additional input variables is not none, add the missing times of the additional input variables also. 
+    if additional_input_variables is not None:
+        for var in additional_input_variables:
+            missing_times = xr.concat([missing_times, xr.open_dataset(f'nan_times_{var}.nc').time], dim='time')
+        # remove duplicates
+        missing_times = missing_times.drop_duplicates('time')
+    print(f"Missing times shape: {missing_times.shape}")
 
     # Read stats of RTMA data
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
-    input_variables_in_order = ['i10fg','orography']  # modify this to match when we work on multiple variabls as input
-    target_variables_in_order = ['i10fg']
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order)
-    target_stats = RTMA_stats.sel(variable=target_variables_in_order)
+    input_variables_in_order = [variable,'orography'] if additional_input_variables is None else [variable]+additional_input_variables+['orography']  
+    target_variables_in_order = [variable]
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order)     
+    input_channnel_indices = list(range(len(input_variables_in_order)))
+    target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
+    target_channnel_indices = list(range(len(target_variables_in_order)))
     # Standardization
     input_transform = Transform(
         mode="minmax",  # 'standard' or 'minmax'
         stats=input_stats,
-        channel_indices=[0, 1]
+        channel_indices=input_channnel_indices
     )
     target_transform = Transform(
         mode="minmax",  # 'standard' or 'minmax'
         stats=target_stats,
-        channel_indices=[0]
+        channel_indices=target_channnel_indices
     )
     # %%
     # Examining the batches without transformations
