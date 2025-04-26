@@ -180,7 +180,7 @@ if __name__ == "__main__":
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
     additional_input_variables = ['t2m','d2m','si10','sh2']
-    dates_range = ['2023-11-09T06','2023-11-09T07']
+    dates_range = ['2023-11-09T06','2023-11-10T13']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
     if additional_input_variables is not None:
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=False,num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=False,num_workers=32, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
@@ -293,7 +293,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=False,num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=False,num_workers=32, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
