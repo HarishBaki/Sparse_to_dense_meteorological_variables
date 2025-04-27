@@ -9,6 +9,7 @@
 #SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=32
+#SBATCH --exclude=dgx02
 # #SBATCH --container-image='docker://nvcr.io/nvidia/physicsnemo/physicsnemo:25.03'
 #SBATCH --container-image='/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh'
 #SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
@@ -17,6 +18,7 @@
 # Optionally pass SLURM values into the shell script as environment variables
 export nproc_per_node=${SLURM_NTASKS_PER_NODE}
 export num_workers=${SLURM_CPUS_PER_TASK}
+export MASTER_PORT=$((20000 + RANDOM % 20000))
 
 # Call the actual training script
 nproc_per_node=${nproc_per_node:-2}
@@ -29,10 +31,10 @@ model='DCNN' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'
-#wandb_id='x3ft1mi4'
-additional_input_variables='t2m,d2m,sh2,si10'
+#wandb_id='qs0o1cds'
+additional_input_variables='si10,t2m,d2m' #'si10,t2m,d2m,sh2'
 
-torchrun --nproc_per_node=$nproc_per_node train.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --variable $variable \
 --epochs $epochs \
 --checkpoint_dir $checkpoint_dir \
@@ -43,5 +45,5 @@ torchrun --nproc_per_node=$nproc_per_node train.py \
 --train_years_range $train_years_range \
 --num_workers $num_workers \
 --additional_input_variables $additional_input_variables 
-#--wandb_id $wandb_id 
+#--wandb_id $wandb_id \
 #--resume
