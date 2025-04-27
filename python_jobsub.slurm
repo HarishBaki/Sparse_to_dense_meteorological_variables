@@ -30,7 +30,7 @@ loss='MaskedCharbonnierLoss'
 model='DCNN' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
-train_years_range='2018'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
+train_years_range='2018,2020'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 #wandb_id='qs0o1cds'
 #additional_input_variables='si10' #'si10,t2m,d2m,sh2'
 
