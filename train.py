@@ -360,7 +360,7 @@ if __name__ == "__main__":
         checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year+'/'+transform
 
     if args.additional_input_variables is not None:
-        checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","_")
+        checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","-")
 
     additional_input_variables = args.additional_input_variables
     if additional_input_variables is not None:
@@ -602,7 +602,7 @@ if __name__ == "__main__":
         else:
             wandb.init(
                 project="sparse-to-dense-RTMA",
-                name=f"{variable}_{model_name}_{loss_name}",
+                name=checkpoint_dir[len('checkpoints/'):].replace('/','_'),
                 config={
                     "variable": variable,
                     "model": model_name,
