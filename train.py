@@ -19,7 +19,7 @@ import pandas as pd
 import time
 
 import os
-import wandb, argparse
+import wandb, argparse, sys
 from tqdm import tqdm
 
 from data_loader import RTMA_sparse_to_dense_Dataset, Transform
@@ -70,7 +70,6 @@ def restore_model_checkpoint(model, optimizer, scheduler, path, device="cuda"):
     return model, optimizer, scheduler, start_epoch
 
 # %%
-
 def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, metric, device, num_epochs,
                checkpoint_dir, train_sampler, scheduler, early_stopping, resume=False):
 
@@ -274,12 +273,55 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
 
-def main():
+# %%
+if __name__ == "__main__":      
+    # This is the main entry point of the script. 
+    # I chose not to create a seperate main function, since this will allow for ipython type debugging. 
+    '''
+    torchrun --nproc_per_node=2 \
+        train.py \
+        --variable i10fg \
+        --additional_input_variables "d2m,t2m,si10,sh2,sp" \
+        --epochs 20 \
+        --resume \
+        --checkpoint_dir checkpoints \
+        --loss MaskedCharbonnierLoss \
+        --model SwinT2UNet \
+        --batch_size 64 \
+        --num_workers 8 \
+        --transform standard \
+        --train_years_range "2018,2021" \
+        --wandb_id "my_wandb_run_id"
+    '''
+
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
+
+    # If run interactively, inject some sample arguments
+    if is_interactive() or len(sys.argv) == 1:
+        sys.argv = [
+            "",  # The first arg is the script name
+            "--variable", "i10fg",
+            "--additional_input_variables", "d2m,t2m",
+            "--epochs", "2",
+            "--loss", "MaskedCharbonnierLoss",
+            "--model", "DCNN",
+            "--batch_size", "16",
+            "--transform", "standard",
+            "--num_workers", "32",
+            "--train_years_range", "2018,2021",
+            "--checkpoint_dir", "checkpoints"
+        ]
+        print("DEBUG: Using injected args:", sys.argv)
+
     # === Argparse and DDP setup ===
     parser = argparse.ArgumentParser(description="Train with DDP")
 
     parser.add_argument("--variable", type=str, default="i10fg", 
-                        help="Variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+                        help="Target variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+    parser.add_argument("--additional_input_variables", type=str, default=None, 
+                        help="Additional input variables to train on seperated by comma ('d2m,t2m,si10,sh2,sp')")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--resume", action="store_true", 
                         help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
@@ -296,7 +338,10 @@ def main():
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
     parser.add_argument("--wandb_id", type=str, default=None, help="WandB run ID for resuming, not passing will create a new run")
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+
+    # %%
+    #
     variable = args.variable
     num_epochs = args.epochs
     resume = args.resume
@@ -313,18 +358,54 @@ def main():
     else:
         start_year, end_year = [y.strip() for y in years[:2]]
         checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year+'/'+transform
+
+    if args.additional_input_variables is not None:
+        checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","_")
+
+    additional_input_variables = args.additional_input_variables
+    if additional_input_variables is not None:
+        additional_input_variables = [v.strip() for v in additional_input_variables.split(",")]
+
     # Compose the date strings for slicing
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']    
 
-    # === Distributed setup ===
-    dist.init_process_group(backend="nccl")
+    # %%
+    # ==================== Distributed setup ====================
+    if "RANK" in os.environ:
+        dist.init_process_group(backend="nccl")
+        # Get rank and set device as before
+        rank = dist.get_rank()
+        local_rank = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(local_rank)
+        device = torch.device("cuda", local_rank)
+    else:
+        # Fallback: single GPU (non-DDP) for debugging or interactive use
+        print("Running without distributed setup (no torchrun detected)")
+        rank = 0
+        local_rank = 0
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Get rank and local GPU id
-    rank = dist.get_rank()
-    local_rank = int(os.environ["LOCAL_RANK"])  # comes from torchrun automatically
+    def is_distributed():
+        return dist.is_available() and dist.is_initialized()       # useful for checking if we are in a distributed environment
 
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
+    # %%
+    # ==== Print the parsed and converted arguments along with the device ====
+    print(
+    f"Args:\n"
+    f"  variable: {variable}\n"
+    f"  num_epochs: {num_epochs}\n"
+    f"  resume: {resume}\n"
+    f"  loss_name: {loss_name}\n"
+    f"  model_name: {model_name}\n"
+    f"  batch_size: {batch_size}\n"
+    f"  num_workers: {num_workers}\n"
+    f"  transform: {transform}\n"
+    f"  train_dates_range: {train_dates_range}\n"
+    f"  wandb_id: {args.wandb_id}\n"
+    f"  checkpoint_dir: {checkpoint_dir}\n"
+    f"  device: {device}\n"
+    f" additional_input_variables: {additional_input_variables}\n"
+    )
 
     # %%
     # === Loading some topography and masking data ===
@@ -356,31 +437,47 @@ def main():
     zarr_store = 'data/RTMA.zarr'
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
+    # if the additional input variables is not none, add the missing times of the additional input variables also. 
+    if additional_input_variables is not None:
+        for var in additional_input_variables:
+            missing_times = xr.concat([missing_times, xr.open_dataset(f'nan_times_{var}.nc').time], dim='time')
+        # remove duplicates
+        missing_times = missing_times.drop_duplicates('time')
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        print(f"Missing times shape: {missing_times.shape}")
 
     # Read stats of RTMA data
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
-    input_variables_in_order = [variable,'orography']  # modify this to match when we work on multiple variabls as input
+    input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order)
-    target_stats = RTMA_stats.sel(variable=target_variables_in_order)
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography'])     
+    input_channnel_indices = list(range(len(input_variables_in_order+['orography'])))
+    target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
+    target_channnel_indices = list(range(len(target_variables_in_order)))
+
+    if not dist.is_initialized() or dist.get_rank() == 0:  
+        print(f"Input stats: {input_stats}", input_channnel_indices)
+        print(f"Target stats: {target_stats}", target_channnel_indices)
+
     if transform.lower() == 'none':
         input_transform = None
         target_transform = None
     else:
         input_transform = Transform(
             mode=transform.lower(),  # 'standard' or 'minmax'
-            stats=input_stats,
-            channel_indices=[0, 1]
+            stats=input_stats,  # So, no need to pass the channel indices, since the transformation will happen on channels from 0 to -1 
+            channel_indices=input_channnel_indices
         )
         target_transform = Transform(
             mode=transform.lower(),  # 'standard' or 'minmax'
             stats=target_stats,
-            channel_indices=[0]
+            channel_indices=target_channnel_indices
         )
 
+    # %%
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
-        variable,
+        input_variables_in_order,
         train_dates_range,
         orography,
         RTMA_lat,
@@ -393,19 +490,22 @@ def main():
         input_transform=input_transform,
         target_transform=target_transform
     )
-    train_sampler = DistributedSampler(train_dataset)
+    if is_distributed():
+        train_sampler = DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         sampler=train_sampler,
-        shuffle=False,
+        shuffle=(train_sampler is None), # shuffle if not using DDP
         pin_memory=True,
         num_workers=num_workers,
         drop_last=True
     )
     validation_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
-        variable,
+        input_variables_in_order,
         validation_dates_range,
         orography,
         RTMA_lat,
@@ -418,11 +518,14 @@ def main():
         input_transform=input_transform,
         target_transform=target_transform
     )
-    validation_sampler = DistributedSampler(validation_dataset)
+    if is_distributed():
+        validation_sampler = DistributedSampler(validation_dataset)
+    else:
+        validation_sampler = None
     validation_dataloader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=(validation_sampler is None), # shuffle if not using DDP
         sampler=validation_sampler,
         pin_memory=True,
         num_workers=num_workers,
@@ -436,7 +539,7 @@ def main():
     # %%
     # === Set up device, model, loss, optimizer ===
     input_resolution = (orography.shape[0], orography.shape[1])
-    in_channels = 3
+    in_channels = len(input_variables_in_order) + 2  # input variables + orography + station mask
     out_channels = 1
     if model_name == "DCNN":
         C = 48
@@ -444,32 +547,32 @@ def main():
         final_kernel = (3, 3)
         n_layers = 7
         model = DCNN(in_channels=in_channels, 
-                     out_channels=out_channels, 
-                     C=C, 
-                     kernel=kernel,
-                       final_kernel=final_kernel, 
-                       n_layers=n_layers,
-                       hard_enforce_stations=True).to(device)
+                        out_channels=out_channels, 
+                        C=C, 
+                        kernel=kernel,
+                        final_kernel=final_kernel, 
+                        n_layers=n_layers,
+                        hard_enforce_stations=True).to(device)
     elif model_name == "UNet":
         C = 32
         n_layers = 4
         model = UNet(in_channels=in_channels, 
-                     out_channels=out_channels,
-                     C=C, 
-                     n_layers=n_layers,
-                     hard_enforce_stations=True).to(device)
+                        out_channels=out_channels,
+                        C=C, 
+                        n_layers=n_layers,
+                        hard_enforce_stations=True).to(device)
     elif model_name == "SwinT2UNet":
         C = 32
         n_layers = 4
         window_sizes = [8, 8, 4, 4, 2]
         head_dim = 32
         model = SwinT2UNet(input_resolution=input_resolution, 
-                       in_channels=in_channels, 
-                       out_channels=out_channels, 
-                       C=C, n_layers=n_layers, 
-                       window_sizes=window_sizes,
-                         head_dim=head_dim,
-                         hard_enforce_stations=True).to(device)
+                        in_channels=in_channels, 
+                        out_channels=out_channels, 
+                        C=C, n_layers=n_layers, 
+                        window_sizes=window_sizes,
+                            head_dim=head_dim,
+                            hard_enforce_stations=True).to(device)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
 
     # Define the loss criterion and metric here, based on input loss name. The functions are sent to the GPU inside
@@ -514,7 +617,7 @@ def main():
                     "scheduler": "ExponentialLR",
                 }
             )
-    '''
+
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -538,12 +641,12 @@ def main():
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    '''
+
     # === Run the test and save the outputs to zarr ===
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
-        variable,
+        input_variables_in_order,
         test_dates_range,
         orography,
         RTMA_lat,
@@ -556,18 +659,21 @@ def main():
         input_transform=input_transform,
         target_transform=target_transform
     )
-    test_sampler = DistributedSampler(test_dataset)
+    if is_distributed():
+        test_sampler = DistributedSampler(test_dataset)
+    else:
+        test_sampler = None
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=(test_sampler is None), # shuffle if not using DDP
         sampler=test_sampler,
         pin_memory=True,
         num_workers=num_workers
     )
     if not dist.is_initialized() or dist.get_rank() == 0:
-         print("Test data loaded successfully.")
-         print(f"Test dataset size: {len(test_dataset)}")
+            print("Test data loaded successfully.")
+            print(f"Test dataset size: {len(test_dataset)}")
 
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting Testing...")
@@ -590,18 +696,4 @@ def main():
         dist.barrier()
         dist.destroy_process_group()
 
-# %%
-if __name__ == "__main__":
-    '''
-    Sample command to run the script:
-    torchrun --nproc_per_node=2 \
-        train.py \
-        --variable i10fg \
-        --epochs 2 \
-        --loss MaskedCharbonnierLoss \
-        --model DCNN \
-        --batch_size 64 \
-        --transform standard
-    '''
-    main()
 
