@@ -291,7 +291,9 @@ if __name__ == "__main__":
         --num_workers 8 \
         --transform standard \
         --train_years_range "2018,2021" \
-        --wandb_id "my_wandb_run_id"
+        --wandb_id "my_wandb_run_id" \
+        --global_seed 42 \
+        --n_random_stations 50
     '''
 
     def is_interactive():
@@ -311,7 +313,9 @@ if __name__ == "__main__":
             "--transform", "standard",
             "--num_workers", "32",
             "--train_years_range", "2018,2021",
-            "--checkpoint_dir", "checkpoints"
+            "--checkpoint_dir", "checkpoints",
+            "--global_seed", "42",
+            "--n_random_stations", "50"
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -337,6 +341,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_years_range", type=str, default="2018,2021",
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
     parser.add_argument("--wandb_id", type=str, default=None, help="WandB run ID for resuming, not passing will create a new run")
+    parser.add_argument("--global_seed", type=int, default=42, help="Global seed for reproducibility")
+    parser.add_argument("--n_random_stations", type=int, default=None, help="Number of random stations in each sample")
 
     args, unknown = parser.parse_known_args()
 
@@ -350,6 +356,8 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     num_workers = args.num_workers
     transform = args.transform
+    global_seed = args.global_seed
+    n_random_stations = args.n_random_stations
     # Parse the input string into a list of years
     years = args.train_years_range.split(",")
     if len(years) == 1:
@@ -361,6 +369,9 @@ if __name__ == "__main__":
 
     if args.additional_input_variables is not None:
         checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","-")
+
+    if n_random_stations is not None:
+        checkpoint_dir = checkpoint_dir+'/'+str(n_random_stations)+'-random-stations'
 
     additional_input_variables = args.additional_input_variables
     if additional_input_variables is not None:
@@ -405,6 +416,8 @@ if __name__ == "__main__":
     f"  checkpoint_dir: {checkpoint_dir}\n"
     f"  device: {device}\n"
     f" additional_input_variables: {additional_input_variables}\n"
+    f"  global_seed: {global_seed}\n"
+    f"  n_random_stations: {n_random_stations}\n"
     )
 
     # %%
@@ -488,7 +501,9 @@ if __name__ == "__main__":
         mask,
         missing_times,
         input_transform=input_transform,
-        target_transform=target_transform
+        target_transform=target_transform,
+        n_random_stations=n_random_stations,
+        global_seed=global_seed
     )
     if is_distributed():
         train_sampler = DistributedSampler(train_dataset)
@@ -516,7 +531,9 @@ if __name__ == "__main__":
         mask,
         missing_times,
         input_transform=input_transform,
-        target_transform=target_transform
+        target_transform=target_transform,
+        n_random_stations=n_random_stations,
+        global_seed=global_seed
     )
     if is_distributed():
         validation_sampler = DistributedSampler(validation_dataset)
@@ -615,6 +632,9 @@ if __name__ == "__main__":
                     "transform": transform,
                     "train_dates_range": train_dates_range,
                     "scheduler": "ExponentialLR",
+                    "additional_input_variables": additional_input_variables,
+                    "global_seed": global_seed,
+                    "n_random_stations": n_random_stations
                 }
             )
 
