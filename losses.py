@@ -56,7 +56,7 @@ class MaskedRMSELoss(nn.Module):
         """
         output: [B, 1, H, W]
         target: [B, 1, H, W]
-        station_mask: [B, H, W]  (1=station, 0=else)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
         """
         B, _, H, W = output.shape
         mask = self.mask_2d.unsqueeze(0).unsqueeze(0).to(output.device)   # [1, 1, H, W]
