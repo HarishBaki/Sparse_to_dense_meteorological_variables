@@ -7,6 +7,7 @@ from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
 import pandas as pd
 import time
+import os
 
 class Transform:
     def __init__(self, mode, stats, channel_indices=None):
@@ -58,7 +59,7 @@ class Transform:
 class RTMA_sparse_to_dense_Dataset(Dataset):
     def __init__(self, zarr_store,input_variables_in_order, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
-                 x_indices,mask,missing_times,input_transform=None,target_transform=None):
+                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,global_seed=42):
         '''
         Custom dataset class for loading RTMA data.
         This dataset is designed to work with the RTMA data stored in Zarr format.
@@ -74,6 +75,10 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         - x_indices (ndarray): X indices of the NYSM stations in the RTMA grid.
         - mask (ndarray): Mask for the RTMA grid.
         - missing_times (ndarray): Array of missing times in the dataset.
+        - input_transform (callable, optional): Transformation to apply to the input data.
+        - target_transform (callable, optional): Transformation to apply to the target data.
+        - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
+        - global_seed (int, optional): Seed for random number generation.
         Returns:
         - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
         - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
@@ -91,10 +96,8 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.nysm_latlon = nysm_latlon
         self.y_indices = y_indices
         self.x_indices = x_indices
-        station_mask = np.zeros_like(RTMA_lat, dtype=np.uint8)
-        # Set 1 at the station locations
-        station_mask[y_indices, x_indices] = 1
-        self.station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
+        self.global_seed = global_seed
+        self.n_random_stations = n_random_stations
 
         # Pre-select the time range
         ds = xr.open_zarr(zarr_store)[input_variables_in_order] # this is needed, since we might be working with order of variables. 
@@ -116,13 +119,33 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         target = self.ds[self.input_variables_in_order[0]].isel(time=real_idx)    # an xarray DataArray, shape: [ y, x]. Can access the values directly.
         input = self.ds[self.input_variables_in_order].isel(time=real_idx)  # an xarray Dataset, shape: [ y, x] with number of input variables. Cannot directly extract the values. 
 
+        y_indices = self.y_indices
+        x_indices = self.x_indices
+        nysm_latlon = self.nysm_latlon
+        # Check for the n_random_stations
+        if self.n_random_stations is not None:
+            # Randomly select n_random_stations from the NYSM stations
+            rng = np.random.default_rng(self.global_seed + idx) # The dataset index will always pick the same random stations for that idx, regardless of which worker, GPU, or process loads it.
+            perm = rng.permutation(len(self.nysm_latlon))
+            #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
+            random_indices = perm[:self.n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
+            # Update the y_indices and x_indices to the random stations
+            y_indices = self.y_indices[random_indices]
+            x_indices = self.x_indices[random_indices]
+            nysm_latlon = self.nysm_latlon[random_indices]
+
+        station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
+        # Set 1 at the station locations
+        station_mask[y_indices, x_indices] = 1
+        station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
+
         # Grab station values from input for all input variables
         inputs_interp = []
         for i, var in enumerate(self.input_variables_in_order):
-            station_values = input[var].values[self.y_indices, self.x_indices]
+            station_values = input[var].values[y_indices, x_indices]
             # Interpolate station values to full grid
             interp = griddata(
-                self.nysm_latlon,
+                nysm_latlon,
                 station_values,
                 (self.RTMA_lat, self.RTMA_lon),
                 method='nearest'
@@ -132,7 +155,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
         
         # Combine inputs: interpolated + orography
-        input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+        input_tensor = np.concatenate([interp, self.orography,station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
         target_tensor = np.where(self.mask, target.values, 0)
@@ -215,6 +238,10 @@ if __name__ == "__main__":
         channel_indices=target_channnel_indices
     )
 
+    # Now, setting up the random seed for reproducibility
+    global_seed = 42
+    n_random_stations = 100
+
     # %%
     # Examining the batches without transformations
     # compute time taken call dataset
@@ -233,14 +260,16 @@ if __name__ == "__main__":
         mask,
         missing_times,
         input_transform=None,
-        target_transform=None
+        target_transform=None,
+        global_seed=global_seed,
+        n_random_stations=n_random_stations
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=False,num_workers=32, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
@@ -286,14 +315,16 @@ if __name__ == "__main__":
         mask,
         missing_times,
         input_transform=input_transform,
-        target_transform=target_transform
+        target_transform=target_transform,
+        global_seed=global_seed,
+        n_random_stations=n_random_stations
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=False,num_workers=32, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
