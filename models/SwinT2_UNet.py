@@ -340,6 +340,8 @@ if __name__ == "__main__":
                          head_dim=head_dim,
                          hard_enforce_stations=True)
     print(model)  # Print the model architecture
+    # print the total number of parameters in the model
+    print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
     # Create a random input tensor
     x = torch.randn(1, in_channels, input_resolution[0], input_resolution[1])  # (batch_size, channels, height, width)
     print(x.shape)  # Should be (1, 3, 256, 288)

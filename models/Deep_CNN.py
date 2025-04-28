@@ -59,6 +59,8 @@ if __name__ == "__main__":
     # Example usage
     model = DCNN(in_channels=3, out_channels=1, C=48, kernel=(7, 7),final_kernel=(3,3), n_layers=7,hard_enforce_stations=True)
     print(model)  # Print the model architecture
+    # print the total number of parameters in the model
+    print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
     x = torch.randn(1, 3, 256, 288)  
     output = model(x)
     print(output.shape)

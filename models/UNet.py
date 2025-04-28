@@ -136,6 +136,8 @@ class UNet(nn.Module):
 if __name__ == "__main__":
     model = UNet(in_channels=3, out_channels=1, C=32, n_layers=4,hard_enforce_stations=True)
     print(model)
+    # print the total number of parameters in the model
+    print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
     x = torch.randn(1, 3, 256, 288)  # Example input
     output = model(x)
     print("Output shape:", output.shape)  # Should be (1, 1, 256, 256)
