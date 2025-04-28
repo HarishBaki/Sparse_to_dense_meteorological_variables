@@ -133,11 +133,8 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             y_indices = self.y_indices[random_indices]
             x_indices = self.x_indices[random_indices]
             nysm_latlon = self.nysm_latlon[random_indices]
-        print(f"{idx} First 2 random nysm latlon: {nysm_latlon[:2]}")
-        print(f"{idx} First 2 y_indices: {y_indices[:2]}")
-        print(f"{idx} First 2 x_indices: {x_indices[:2]}")
 
-        station_mask = np.zeros_like(RTMA_lat, dtype=np.uint8)
+        station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
         # Set 1 at the station locations
         station_mask[y_indices, x_indices] = 1
         station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
