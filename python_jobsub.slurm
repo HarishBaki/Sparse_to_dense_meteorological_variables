@@ -30,11 +30,11 @@ loss='MaskedCharbonnierLoss'
 model='DCNN' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
-train_years_range='2018,2020'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
+train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 wandb_id='jtqxcbcw'
 #additional_input_variables='si10' #'si10,t2m,d2m,sh2'
 global_seed=42
-n_random_stations=50
+n_random_stations=100
 
 torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --variable $variable \
@@ -47,7 +47,7 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --train_years_range $train_years_range \
 --num_workers $num_workers \
 --global_seed $global_seed \
---n_random_stations $n_random_stations \
---wandb_id $wandb_id 
+--n_random_stations $n_random_stations
+#--wandb_id $wandb_id 
 #--additional_input_variables $additional_input_variables 
 #--resume
