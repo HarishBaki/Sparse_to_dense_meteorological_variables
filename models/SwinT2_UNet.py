@@ -119,7 +119,7 @@ class UpSample(nn.Module):
         return x    # Output shape is B H W C
 
 class Encoder(nn.Module):
-    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4):
+    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4, ):
         super().__init__()
         self.input_resolution = input_resolution
         self.C = C
@@ -145,8 +145,8 @@ class Encoder(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU),
@@ -157,8 +157,8 @@ class Encoder(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU)))
@@ -195,8 +195,8 @@ class Bottleneck(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU),
@@ -207,8 +207,8 @@ class Bottleneck(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU))
@@ -250,8 +250,8 @@ class Decoder(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU),
@@ -262,8 +262,8 @@ class Decoder(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.0,
-                proj_drop=0.0,
+                attn_drop=0.2,
+                proj_drop=0.2,
                 mlp_ratio=4.0,
                 norm_layer=nn.LayerNorm,
                 act_layer=nn.GELU)))

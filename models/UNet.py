@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 # %%
 class ConvBlock(nn.Module):
-    def __init__(self, in_channel, out_channel, strides=1):
+    def __init__(self, in_channel, out_channel, strides=1,dropout_prob=0.2):
         super(ConvBlock, self).__init__()
         self.strides = strides
         self.in_channel=in_channel
@@ -15,6 +15,7 @@ class ConvBlock(nn.Module):
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=strides, padding=1),
             nn.LeakyReLU(inplace=True),
+            nn.Dropout2d(p=dropout_prob)
         )
         self.conv11 = nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=strides, padding=0)
 
