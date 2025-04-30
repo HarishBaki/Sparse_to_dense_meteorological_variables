@@ -34,9 +34,18 @@ class Transform:
             raise ValueError("mode must be 'standard' or 'minmax'")
 
     def __call__(self, x):
+            if x.ndim == 4:  # Batched input [B, C, H, W]
+                return torch.stack([self._transform_single(xi.clone()) for xi in x])
+            return self._transform_single(x)
+
+    def inverse(self, x):
+        if x.ndim == 4:  # Batched input [B, C, H, W]
+            return torch.stack([self._inverse_single(xi.clone()) for xi in x])
+        return self._inverse_single(x)
+
+    def _transform_single(self, x):
         C = x.shape[0]
         indices = self.channel_indices or range(C)
-
         for i in indices:
             if self.mode == "standard":
                 x[i] = (x[i] - self.mean[i]) / (self.std[i] + 1e-8)
@@ -44,10 +53,9 @@ class Transform:
                 x[i] = (x[i] - self.min[i]) / (self.max[i] - self.min[i] + 1e-8)
         return x
 
-    def inverse(self, x):
+    def _inverse_single(self, x):
         C = x.shape[0]
         indices = self.channel_indices or range(C)
-
         for i in indices:
             if self.mode == "standard":
                 x[i] = x[i] * self.std[i] + self.mean[i]
@@ -348,12 +356,12 @@ if __name__ == "__main__":
             print(f"Target ➜ max: {target_tensor[0,0].max().item():.4f}, min: {target_tensor[0,0].min().item():.4f}")
 
             # Inverse transform for input and target
-            input_tensor_inv = input_transform.inverse(input_tensor[0])     # shape: [3, y, x]
-            target_tensor_inv = target_transform.inverse(target_tensor[0])  # shape: [1, y, x]
+            input_tensor_inv = input_transform.inverse(input_tensor)     # shape: [B, 3, y, x]
+            target_tensor_inv = target_transform.inverse(target_tensor)  # shape: [B, 1, y, x]
             print("Inverse transformed tensors shapes:", input_tensor_inv.shape, target_tensor_inv.shape)
             for i in range(input_tensor.shape[1]):
-                print(f"Inverse Input Channel 0 ➜ max: {input_tensor_inv[i].max().item():.4f}, min: {input_tensor_inv[i].min().item():.4f}")
-            print(f"Inverse Target ➜ max: {target_tensor_inv.max().item():.4f}, min: {target_tensor_inv.min().item():.4f}")
+                print(f"Inverse Input Channel 0 ➜ max: {input_tensor_inv[0][i].max().item():.4f}, min: {input_tensor_inv[0][i].min().item():.4f}")
+            print(f"Inverse Target ➜ max: {target_tensor_inv[0].max().item():.4f}, min: {target_tensor_inv[0].min().item():.4f}")
 
         else:
             print(f"Batch {b+1}: No data in this batch.")
