@@ -2,10 +2,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from timm.layers import DropPath
 
 # %%
 class ConvBlock(nn.Module):
-    def __init__(self, in_channel, out_channel, strides=1,dropout_prob=0.2):
+    def __init__(self, in_channel, out_channel, strides=1,dropout_prob=0.2,drop_path_prob=0.1):
         super(ConvBlock, self).__init__()
         self.strides = strides
         self.in_channel=in_channel
@@ -18,9 +19,11 @@ class ConvBlock(nn.Module):
             nn.Dropout2d(p=dropout_prob)
         )
         self.conv11 = nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=strides, padding=0)
+        self.drop_path = DropPath(drop_path_prob) if drop_path_prob > 0.0 else nn.Identity()
 
     def forward(self, x):
         out1 = self.block(x)
+        out1 = self.drop_path(out1)
         out2 = self.conv11(x)
         out = out1 + out2
         return out
