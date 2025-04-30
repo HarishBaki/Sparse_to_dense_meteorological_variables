@@ -6,7 +6,7 @@ from timm.layers import DropPath
 
 # %%
 class ConvBlock(nn.Module):
-    def __init__(self, in_channel, out_channel, strides=1,dropout_prob=0.2,drop_path_prob=0.1):
+    def __init__(self, in_channel, out_channel, strides=1,dropout_prob=0.2,drop_path_prob=0.0):
         super(ConvBlock, self).__init__()
         self.strides = strides
         self.in_channel=in_channel
