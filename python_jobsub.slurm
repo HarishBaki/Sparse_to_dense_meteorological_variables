@@ -6,7 +6,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=160gb
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=32
 #SBATCH --exclude=dgx02
@@ -23,16 +23,16 @@ export MASTER_PORT=$((20000 + RANDOM % 20000))
 # Call the actual training script
 nproc_per_node=${nproc_per_node:-2}
 num_workers=${num_workers:-32}
-variable='i10fg'    #'i10fg','d2m','t2m','si10','sh2','sp'
+variable='i10fg'    #'i10fg','si10','t2m','sh2'
 epochs=120
 checkpoint_dir='checkpoints'
 loss='MaskedCharbonnierLoss'
-model='DCNN' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
+model='SwinT2UNet' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
-wandb_id='jtqxcbcw'
-#additional_input_variables='si10' #'si10,t2m,d2m,sh2'
+wandb_id='dw002q33'
+additional_input_variables='si10' #'si10,t2m,d2m,sh2'
 global_seed=42
 n_random_stations=100
 
@@ -46,8 +46,8 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --transform $transform \
 --train_years_range $train_years_range \
 --num_workers $num_workers \
---global_seed $global_seed \
---n_random_stations $n_random_stations
-#--wandb_id $wandb_id 
+--wandb_id $wandb_id 
+#--global_seed $global_seed \
+#--n_random_stations $n_random_stations
 #--additional_input_variables $additional_input_variables 
 #--resume
