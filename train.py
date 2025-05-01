@@ -108,6 +108,11 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
 
             train_loss_total += loss.item()
 
+            # === Optional: Apply inverse transform if needed ===
+            if target_transform is not None:
+                output = target_transform.inverse(output)
+                target_tensor = target_transform.inverse(target_tensor)
+
             # Compute the metric
             metric_value = metric(output, target_tensor, station_mask)
             train_metric_total += metric_value.item()
@@ -134,6 +139,11 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
                 loss = criterion(output, target_tensor,station_mask)
                 val_loss_total += loss.item()
 
+            # === Optional: Apply inverse transform if needed ===
+            if target_transform is not None:
+                output = target_transform.inverse(output)
+                target_tensor = target_transform.inverse(target_tensor)
+                
                 # Compute the metric
                 metric_value = metric(output, target_tensor, station_mask)
                 val_metric_total += metric_value.item()
@@ -242,6 +252,11 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
             loss = criterion(output, target_tensor,station_mask)
             test_loss_total += loss.item()
 
+            # === Optional: Apply inverse transform if needed ===
+            if target_transform is not None:
+                output = target_transform.inverse(output)
+                target_tensor = target_transform.inverse(target_tensor)
+
             # Compute the metric
             metric_value = metric(output, target_tensor, station_mask)
             test_metric_total += metric_value.item()
@@ -257,9 +272,6 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
             for i, t in enumerate(time_np):
                 idx = time_to_idx.get(t)
                 if idx is not None:
-                    # inverse transform the output if needed
-                    if target_transform is not None:
-                        output_np[i] = (target_transform.inverse(output_np[i])).squeeze(0)
                     # Write to zarr
                     zarr_variable[idx] = (output_np[i]).squeeze(0)
                 else:
@@ -637,7 +649,7 @@ if __name__ == "__main__":
                     "n_random_stations": n_random_stations
                 }
             )
-
+    '''
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -661,7 +673,7 @@ if __name__ == "__main__":
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-
+    '''
     # === Run the test and save the outputs to zarr ===
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
