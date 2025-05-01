@@ -27,14 +27,14 @@ num_workers=${num_workers:-32}
 checkpoint_dir='checkpoints'
 variable='i10fg'    #'i10fg','si10','t2m','sh2'
 model='UNet' #  'UNet' 'DCNN', 'SwinT2UNet'
-orography_as_channel='false'  # 'True' or 'False'
+orography_as_channel='true'  # 'True' or 'False'
 additional_input_variables='none' # 'si10,t2m,sh2' or 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 global_seed=42
 n_random_stations='none'
 loss='MaskedCharbonnierLoss'
 transform='standard'  # 'standard', 'minmax', 'none'
-epochs=1
+epochs=120
 batch_size=16
 wandb_id='none'
 
