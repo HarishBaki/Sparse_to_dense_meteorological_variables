@@ -143,7 +143,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             y_indices = self.y_indices[random_indices]
             x_indices = self.x_indices[random_indices]
             nysm_latlon = self.nysm_latlon[random_indices]
-        print(f"nysm_latlon:",nysm_latlon[:5])
+        #print(f"nysm_latlon:",nysm_latlon[:5])
         station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
         # Set 1 at the station locations
         station_mask[y_indices, x_indices] = 1
