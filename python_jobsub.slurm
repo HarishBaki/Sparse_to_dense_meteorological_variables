@@ -30,10 +30,10 @@ orography_as_channel='true'  # 'True' or 'False'
 additional_input_variables='none' # 'si10,t2m,sh2' or 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 global_seed=42
-n_random_stations='none'
+n_random_stations=50
 loss='MaskedCharbonnierLoss'
 transform='standard'  # 'standard', 'minmax', 'none'
-epochs=120
+epochs=2
 batch_size=16
 wandb_id='none'
 

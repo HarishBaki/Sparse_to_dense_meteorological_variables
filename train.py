@@ -80,7 +80,7 @@ def restore_model_checkpoint(model, optimizer, scheduler, path, device="cuda"):
 
 # %%
 def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, metric, device, num_epochs,
-               checkpoint_dir, train_sampler, scheduler, early_stopping, resume=False):
+               checkpoint_dir, train_sampler, scheduler, early_stopping, target_transform=None,resume=False):
 
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     f"  device: {device}\n"
     f"  resume: {resume}\n"
     )
-    '''
+    
     # %%
     # === Loading some topography and masking data ===
     orography = xr.open_dataset('orography.nc').orog
@@ -623,6 +623,9 @@ if __name__ == "__main__":
                 config={
                     "variable": variable,
                     "model": model_name,
+                    "input channels": in_channels,
+                    "output channels": out_channels,
+                    "input_resolution": input_resolution,
                     "optimizer": "Adam",
                     "lr": optimizer.param_groups[0]["lr"],
                     "loss_fn": loss_name,
@@ -634,7 +637,8 @@ if __name__ == "__main__":
                     "scheduler": "ExponentialLR",
                     "additional_input_variables": additional_input_variables,
                     "global_seed": global_seed,
-                    "n_random_stations": n_random_stations
+                    "n_random_stations": n_random_stations,
+                    "orography_as_channel": orography_as_channel,
                 }
             )
     
@@ -654,6 +658,7 @@ if __name__ == "__main__":
         train_sampler=train_sampler, 
         scheduler=scheduler,
         early_stopping=early_stopping,
+        target_transform=target_transform,
         resume=resume
     )
     # === Barrier to ensure all ranks wait for checkpoint ===
@@ -708,7 +713,7 @@ if __name__ == "__main__":
         variable = variable, 
         target_transform = target_transform
     )
-    '''
+    
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
