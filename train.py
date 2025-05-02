@@ -463,8 +463,8 @@ if __name__ == "__main__":
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
     input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography'])     
-    input_channnel_indices = list(range(len(input_variables_in_order+['orography'])))
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography']) if orography_as_channel else RTMA_stats.sel(variable=input_variables_in_order)    
+    input_channnel_indices = list(range(len(input_variables_in_order+['orography']))) if orography_as_channel else list(range(len(input_variables_in_order)))
     target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
     target_channnel_indices = list(range(len(target_variables_in_order)))
 
@@ -491,6 +491,7 @@ if __name__ == "__main__":
     train_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         input_variables_in_order,
+        orography_as_channel,
         train_dates_range,
         orography,
         RTMA_lat,
@@ -521,6 +522,7 @@ if __name__ == "__main__":
     validation_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         input_variables_in_order,
+        orography_as_channel,
         validation_dates_range,
         orography,
         RTMA_lat,
@@ -556,7 +558,10 @@ if __name__ == "__main__":
     # %%
     # === Set up device, model, loss, optimizer ===
     input_resolution = (orography.shape[0], orography.shape[1])
-    in_channels = len(input_variables_in_order) + 2  # input variables + orography + station mask
+    if orography_as_channel:
+        in_channels = len(input_variables_in_order) + 2  # input variables + orography + station mask
+    else:
+        in_channels = len(input_variables_in_order) + 1 # input variables + station mask
     out_channels = 1
     if model_name == "DCNN":
         C = 48
@@ -672,6 +677,7 @@ if __name__ == "__main__":
     test_dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         input_variables_in_order,
+        orography_as_channel,
         test_dates_range,
         orography,
         RTMA_lat,
