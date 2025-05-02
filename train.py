@@ -30,6 +30,15 @@ from models.SwinT2_UNet import SwinT2UNet
 
 from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnierLoss
 
+def str_or_none(v):
+    return None if v.lower() == 'none' else v
+
+def int_or_none(v):
+    return None if v.lower() == 'none' else int(v)
+
+def bool_from_str(v):
+    return v.lower() == 'true'
+
 # %%
 # === Early stopping, and checkpointing functions ===
 class EarlyStopping:
@@ -290,64 +299,85 @@ if __name__ == "__main__":
     # This is the main entry point of the script. 
     # === Argparse and DDP setup ===
     parser = argparse.ArgumentParser(description="Train with DDP")
-
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Directory to save checkpoints")
     parser.add_argument("--variable", type=str, default="i10fg", 
                         help="Target variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
-    parser.add_argument("--additional_input_variables", type=str, default=None, 
-                        help="Additional input variables to train on seperated by comma ('d2m,t2m,si10,sh2,sp')")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
-    parser.add_argument("--resume", action="store_true", 
-                        help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Directory to save checkpoints")
-    parser.add_argument("--loss", type=str, default="MaskedRMSELoss", 
-                        help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
     parser.add_argument("--model", type=str, default="DCNN", 
                         help="Model architecture to use ('DCNN', 'GoogleUNet', 'UNet', 'SwinT2UNet')")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
-    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
-    parser.add_argument("--transform", type=str, default="none", 
-                        help="Transform to apply to the data ('none', 'minmax', 'standard')")
+    parser.add_argument("--orography_as_channel", type=bool_from_str, default=False,
+                    help="Use orography as input channel: True or False")
+    parser.add_argument("--additional_input_variables", type=str_or_none, default=None, 
+                        help="Additional input variables to train on seperated by comma ('si10,t2m,,sh2'), else pass None")
     parser.add_argument("--train_years_range", type=str, default="2018,2021",
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
-    parser.add_argument("--wandb_id", type=str, default=None, help="WandB run ID for resuming, not passing will create a new run")
     parser.add_argument("--global_seed", type=int, default=42, help="Global seed for reproducibility")
-    parser.add_argument("--n_random_stations", type=int, default=None, help="Number of random stations in each sample")
-
+    parser.add_argument("--n_random_stations", type=int_or_none, default=None, help="Number of random stations in each sample")
+    parser.add_argument("--loss", type=str, default="MaskedCharbonnierLoss", 
+                        help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
+    parser.add_argument("--transform", type=str, default="standard", 
+                        help="Transform to apply to the data ('none', 'minmax', 'standard')")
+    parser.add_argument("--epochs", type=int, default=120, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
+    parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
+    parser.add_argument("--wandb_id", type=str_or_none, default=None, help="WandB run ID for resuming, not passing will create a new run")
+    parser.add_argument("--resume", action="store_true", 
+                        help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
     args, unknown = parser.parse_known_args()
 
     # %%
     #
+    checkpoint_dir = args.checkpoint_dir
+
     variable = args.variable
-    num_epochs = args.epochs
-    resume = args.resume
-    loss_name = args.loss
+    checkpoint_dir = checkpoint_dir+'/'+variable
+
     model_name = args.model
-    batch_size = args.batch_size
-    num_workers = args.num_workers
-    transform = args.transform
-    global_seed = args.global_seed
-    n_random_stations = args.n_random_stations
-    # Parse the input string into a list of years
-    years = args.train_years_range.split(",")
-    if len(years) == 1:
-        start_year = end_year = years[0].strip()
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'/'+transform
-    else:
-        start_year, end_year = [y.strip() for y in years[:2]]
-        checkpoint_dir = args.checkpoint_dir+'/'+variable+'/'+model_name+'/'+loss_name+'/'+start_year+'-'+end_year+'/'+transform
+    checkpoint_dir = checkpoint_dir+'/'+model_name
 
-    if args.additional_input_variables is not None:
-        checkpoint_dir = checkpoint_dir+'/'+args.additional_input_variables.replace(",","-")
-
-    if n_random_stations is not None:
-        checkpoint_dir = checkpoint_dir+'/'+str(n_random_stations)+'-random-stations'
-
+    orography_as_channel = args.orography_as_channel
     additional_input_variables = args.additional_input_variables
     if additional_input_variables is not None:
         additional_input_variables = [v.strip() for v in additional_input_variables.split(",")]
-
+    additional_channels = []
+    if orography_as_channel:
+        additional_channels.append('orography')
+    if additional_input_variables is not None:
+        additional_channels.extend(additional_input_variables)
+    if len(additional_channels) > 0:
+        checkpoint_dir = checkpoint_dir + '/' + "-".join(additional_channels)
+    else:
+        checkpoint_dir = checkpoint_dir + '/no-additional-channels'
+    
+    years = args.train_years_range.split(",")
+    if len(years) == 1:
+        start_year = end_year = years[0].strip()
+        checkpoint_dir = checkpoint_dir+'/'+start_year
+    else:
+        start_year, end_year = [y.strip() for y in years[:2]]
+        checkpoint_dir = checkpoint_dir+'/'+start_year+'-'+end_year
     # Compose the date strings for slicing
-    train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']    
+    train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']
+
+    n_random_stations = args.n_random_stations
+    global_seed = args.global_seed
+    if n_random_stations is not None:
+        checkpoint_dir = f"{checkpoint_dir}/{global_seed}/{n_random_stations}-random-stations"
+    else:
+        checkpoint_dir = f"{checkpoint_dir}/all-stations"
+
+    loss_name = args.loss
+    checkpoint_dir = checkpoint_dir+'/'+loss_name
+
+    transform = args.transform
+    checkpoint_dir = checkpoint_dir+'/'+transform
+    
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir, exist_ok=True)
+
+    num_epochs = args.epochs
+    resume = args.resume
+    batch_size = args.batch_size
+    num_workers = args.num_workers  
 
     # %%
     # ==================== Distributed setup ====================
@@ -372,23 +402,24 @@ if __name__ == "__main__":
     # ==== Print the parsed and converted arguments along with the device ====
     print(
     f"Args:\n"
-    f"  variable: {variable}\n"
-    f"  num_epochs: {num_epochs}\n"
-    f"  resume: {resume}\n"
-    f"  loss_name: {loss_name}\n"
-    f"  model_name: {model_name}\n"
-    f"  batch_size: {batch_size}\n"
-    f"  num_workers: {num_workers}\n"
-    f"  transform: {transform}\n"
-    f"  train_dates_range: {train_dates_range}\n"
-    f"  wandb_id: {args.wandb_id}\n"
     f"  checkpoint_dir: {checkpoint_dir}\n"
-    f"  device: {device}\n"
-    f" additional_input_variables: {additional_input_variables}\n"
+    f"  variable: {variable}\n"
+    f"  model_name: {model_name}\n"
+    f"  orography_as_channel: {orography_as_channel}\n"
+    f"  additional_input_variables: {additional_input_variables}\n"
+    f"  train_years_range: {train_dates_range}\n"
     f"  global_seed: {global_seed}\n"
     f"  n_random_stations: {n_random_stations}\n"
+    f"  loss_name: {loss_name}\n"
+    f"  transform: {transform}\n"
+    f"  num_epochs: {num_epochs}\n"
+    f"  batch_size: {batch_size}\n"
+    f"  num_workers: {num_workers}\n"
+    f"  wandb_id: {args.wandb_id}\n"
+    f"  device: {device}\n"
+    f"  resume: {resume}\n"
     )
-
+    '''
     # %%
     # === Loading some topography and masking data ===
     orography = xr.open_dataset('orography.nc').orog
@@ -677,7 +708,7 @@ if __name__ == "__main__":
         variable = variable, 
         target_transform = target_transform
     )
-    
+    '''
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
