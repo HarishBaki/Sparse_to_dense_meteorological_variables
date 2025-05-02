@@ -14,7 +14,7 @@ class MaskedMSELoss(nn.Module):
         mask_2d: torch.Tensor [H, W] (1=inside NY, 0=outside NY)
         """
         super().__init__()
-        self.register_buffer("mask_2d", mask_2d.float())  # persists on .cuda()/.cpu()
+        self.register_buffer("mask_2d", mask_2d.float())  # persists on .cuda()/.cpu(), such that the mask_2d devie is used. 
 
     def forward(self, output, target, station_mask):
         """
@@ -50,7 +50,7 @@ class MaskedRMSELoss(nn.Module):
         mask_2d: torch.Tensor [H, W] (1=inside NY, 0=outside NY)
         """
         super().__init__()
-        self.register_buffer("mask_2d", mask_2d.float())  # persists on .cuda()/.cpu()
+        self.register_buffer("mask_2d", mask_2d.float())  # persists on .cuda()/.cpu(), such that the mask_2d devie is used.
 
     def forward(self, output, target, station_mask):
         """
@@ -59,8 +59,8 @@ class MaskedRMSELoss(nn.Module):
         station_mask: [B, 1, H, W]  (1=station, 0=else)
         """
         B, _, H, W = output.shape
-        mask = self.mask_2d.unsqueeze(0).unsqueeze(0).to(output.device)   # [1, 1, H, W]
-        station_mask = station_mask.float().to(output.device)  # [B, 1, H, W]
+        mask = self.mask_2d.unsqueeze(0).unsqueeze(0)   # [1, 1, H, W]
+        station_mask = station_mask.float()  # [B, 1, H, W]
 
         # Only inside NY and not at stations
         valid_mask = (mask == 1) & (station_mask == 0)       # [B, 1, H, W]
@@ -85,7 +85,7 @@ class MaskedTVLoss(nn.Module):
         beta: degree of smoothness penalty
         """
         super().__init__()
-        self.register_buffer("mask_2d", mask_2d.float())
+        self.register_buffer("mask_2d", mask_2d.float())    # persists on .cuda()/.cpu(), such that the mask_2d devie is used.
         self.tv_loss_weight = tv_loss_weight
         self.beta = beta
 
@@ -122,7 +122,7 @@ class MaskedCharbonnierLoss(nn.Module):
         eps: Charbonnier smoothing factor
         """
         super().__init__()
-        self.register_buffer("mask_2d", mask_2d.float())
+        self.register_buffer("mask_2d", mask_2d.float())   # persists on .cuda()/.cpu(), such that the mask_2d devie is used.
         self.eps = eps
 
     def forward(self, x, y, station_mask):
