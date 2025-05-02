@@ -24,17 +24,17 @@ export MASTER_PORT=$((20000 + RANDOM % 20000))
 nproc_per_node=${nproc_per_node:-2}
 num_workers=${num_workers:-32}
 variable='i10fg'    #'i10fg','si10','t2m','sh2'
-epochs=120
-checkpoint_dir='checkpoints'
+epochs=2
+checkpoint_dir='checkpoints_'
 loss='MaskedCharbonnierLoss'
-model='SwinT2UNet' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
+model='UNet' #  'UNet' 'DCNN', 'GoogleUNet', 'SwinT2UNet'
 batch_size=16
 transform='standard'  # 'standard', 'minmax', 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 wandb_id='dw002q33'
 additional_input_variables='si10' #'si10,t2m,d2m,sh2'
 global_seed=42
-n_random_stations=100
+n_random_stations=60
 
 torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --variable $variable \
@@ -46,8 +46,8 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --transform $transform \
 --train_years_range $train_years_range \
 --num_workers $num_workers \
---wandb_id $wandb_id 
-#--global_seed $global_seed \
-#--n_random_stations $n_random_stations
+--global_seed $global_seed \
+--n_random_stations $n_random_stations 
+#--wandb_id $wandb_id 
 #--additional_input_variables $additional_input_variables 
 #--resume

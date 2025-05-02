@@ -139,10 +139,10 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
                 loss = criterion(output, target_tensor,station_mask)
                 val_loss_total += loss.item()
 
-            # === Optional: Apply inverse transform if needed ===
-            if target_transform is not None:
-                output = target_transform.inverse(output)
-                target_tensor = target_transform.inverse(target_tensor)
+                # === Optional: Apply inverse transform if needed ===
+                if target_transform is not None:
+                    output = target_transform.inverse(output)
+                    target_tensor = target_transform.inverse(target_tensor)
                 
                 # Compute the metric
                 metric_value = metric(output, target_tensor, station_mask)
@@ -288,49 +288,6 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
 # %%
 if __name__ == "__main__":      
     # This is the main entry point of the script. 
-    # I chose not to create a seperate main function, since this will allow for ipython type debugging. 
-    '''
-    torchrun --nproc_per_node=2 \
-        train.py \
-        --variable i10fg \
-        --additional_input_variables "d2m,t2m,si10,sh2,sp" \
-        --epochs 20 \
-        --resume \
-        --checkpoint_dir checkpoints \
-        --loss MaskedCharbonnierLoss \
-        --model SwinT2UNet \
-        --batch_size 64 \
-        --num_workers 8 \
-        --transform standard \
-        --train_years_range "2018,2021" \
-        --wandb_id "my_wandb_run_id" \
-        --global_seed 42 \
-        --n_random_stations 50
-    '''
-
-    def is_interactive():
-        import __main__ as main
-        return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
-
-    # If run interactively, inject some sample arguments
-    if is_interactive() or len(sys.argv) == 1:
-        sys.argv = [
-            "",  # The first arg is the script name
-            "--variable", "i10fg",
-            "--additional_input_variables", "d2m,t2m",
-            "--epochs", "2",
-            "--loss", "MaskedCharbonnierLoss",
-            "--model", "DCNN",
-            "--batch_size", "16",
-            "--transform", "standard",
-            "--num_workers", "32",
-            "--train_years_range", "2018,2021",
-            "--checkpoint_dir", "checkpoints",
-            "--global_seed", "42",
-            "--n_random_stations", "50"
-        ]
-        print("DEBUG: Using injected args:", sys.argv)
-
     # === Argparse and DDP setup ===
     parser = argparse.ArgumentParser(description="Train with DDP")
 
@@ -630,7 +587,7 @@ if __name__ == "__main__":
             )
         else:
             wandb.init(
-                project="sparse-to-dense-RTMA",
+                project="Testing",
                 name=checkpoint_dir[len('checkpoints/'):].replace('/','_'),
                 config={
                     "variable": variable,
@@ -649,7 +606,7 @@ if __name__ == "__main__":
                     "n_random_stations": n_random_stations
                 }
             )
-    '''
+    
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -673,7 +630,7 @@ if __name__ == "__main__":
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    '''
+    
     # === Run the test and save the outputs to zarr ===
     test_dates_range = ['2023-01-01T00', '2023-12-31T23']
     test_dataset = RTMA_sparse_to_dense_Dataset(
@@ -720,7 +677,7 @@ if __name__ == "__main__":
         variable = variable, 
         target_transform = target_transform
     )
-
+    
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
