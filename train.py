@@ -619,11 +619,11 @@ if __name__ == "__main__":
     if not dist.is_initialized() or dist.get_rank() == 0:
         if args.wandb_id is not None:
             wandb.init(
-                project="sparse-to-dense-RTMA",id=args.wandb_id,resume='allow',
+                project="sparse-to-dense",id=args.wandb_id,resume='allow',
             )
         else:
             wandb.init(
-                project="Testing",
+                project="Sparse-to-Dense",
                 name=checkpoint_dir[len('checkpoints/'):].replace('/','_'),
                 config={
                     "variable": variable,

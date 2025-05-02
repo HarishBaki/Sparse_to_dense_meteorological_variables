@@ -6,7 +6,7 @@
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=160gb
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=32
 #SBATCH --exclude=dgx02
@@ -27,13 +27,13 @@ checkpoint_dir='checkpoints'
 variable='i10fg'    #'i10fg','si10','t2m','sh2'
 model='UNet' #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel='true'  # 'True' or 'False'
-additional_input_variables='none' # 'si10,t2m,sh2' or 'none'
+additional_input_variables='si10,t2m,sh2' # 'si10,t2m,sh2' or 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 global_seed=42
-n_random_stations=50
+n_random_stations='none' # 'none' or a number
 loss='MaskedCharbonnierLoss'
 transform='standard'  # 'standard', 'minmax', 'none'
-epochs=2
+epochs=120
 batch_size=16
 wandb_id='none'
 
