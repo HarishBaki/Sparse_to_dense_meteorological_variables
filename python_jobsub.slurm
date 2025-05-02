@@ -25,7 +25,7 @@ nproc_per_node=${nproc_per_node:-2}
 num_workers=${num_workers:-32}
 checkpoint_dir='checkpoints'
 variable='i10fg'    #'i10fg','si10','t2m','sh2'
-model='UNet' #  'UNet' 'DCNN', 'SwinT2UNet'
+model='DCNN' #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel='true'  # 'True' or 'False'
 additional_input_variables='si10,t2m,sh2' # 'si10,t2m,sh2' or 'none'
 train_years_range='2018,2021'   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
@@ -35,7 +35,7 @@ loss='MaskedCharbonnierLoss'
 transform='standard'  # 'standard', 'minmax', 'none'
 epochs=120
 batch_size=16
-wandb_id='none'
+wandb_id='3itica5v'
 
 torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --checkpoint_dir $checkpoint_dir \
@@ -51,5 +51,5 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --epochs $epochs \
 --batch_size $batch_size \
 --num_workers $num_workers \
---wandb_id $wandb_id 
-#--resume
+--wandb_id $wandb_id \
+--resume
