@@ -65,7 +65,7 @@ class Transform:
 
 
 class RTMA_sparse_to_dense_Dataset(Dataset):
-    def __init__(self, zarr_store,input_variables_in_order, dates_range, orography, 
+    def __init__(self, zarr_store,input_variables_in_order,orography_as_channel, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
                  x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,global_seed=42):
         '''
@@ -74,6 +74,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         Parameters:
         - zarr_store (str): Path to the Zarr store containing RTMA data.
         - input_variables_in_order (list): Names of the variables to load from the Zarr store, in which the first one itself is the target. even for a single variable, it should be a list of length 1.
+        - orography_as_channel (bool): If True, orography is treated as a separate channel.
         - dates_range (list): List containing start and end dates for filtering the data.
         - orography (ndarray): Orography data for the region.
         - RTMA_lat (ndarray): Latitude values for the RTMA grid.
@@ -96,6 +97,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.target_transform = target_transform
         self.zarr_store = zarr_store
         self.input_variables_in_order = input_variables_in_order
+        self.orography_as_channel = orography_as_channel
         self.dates_range = dates_range
         self.RTMA_lat = RTMA_lat
         self.RTMA_lon = RTMA_lon
@@ -156,8 +158,13 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         # Stack the interpolated inputs
         interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
         
-        # Combine inputs: interpolated + orography
-        input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+        if self.orography_as_channel:
+            # Combine inputs: interpolated + orography + station mask
+            input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+        else:
+            # combine inputs: interpolated + station mask
+            input_tensor = np.concatenate([interp, self.station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
+        
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
         target_tensor = np.where(self.mask, target.values, 0)
@@ -204,7 +211,8 @@ if __name__ == "__main__":
 
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
-    additional_input_variables = ['t2m','d2m','si10','sh2']
+    orography_as_channel = False
+    additional_input_variables = None #['t2m','d2m','si10','sh2']
     dates_range = ['2023-11-09T06','2023-11-10T13']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
@@ -224,8 +232,8 @@ if __name__ == "__main__":
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
     input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
-    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography'])     
-    input_channnel_indices = list(range(len(input_variables_in_order+['orography'])))
+    input_stats = RTMA_stats.sel(variable=input_variables_in_order+['orography']) if orography_as_channel else RTMA_stats.sel(variable=input_variables_in_order)    
+    input_channnel_indices = list(range(len(input_variables_in_order+['orography']))) if orography_as_channel else list(range(len(input_variables_in_order)))
     target_stats = RTMA_stats.sel(variable=target_variables_in_order)  
     target_channnel_indices = list(range(len(target_variables_in_order)))
     # Standardization
@@ -252,6 +260,7 @@ if __name__ == "__main__":
     dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         input_variables_in_order,
+        orography_as_channel,
         dates_range,
         orography,
         RTMA_lat,
@@ -307,6 +316,7 @@ if __name__ == "__main__":
     dataset = RTMA_sparse_to_dense_Dataset(
         zarr_store,
         input_variables_in_order,
+        orography_as_channel,
         dates_range,
         orography,
         RTMA_lat,
