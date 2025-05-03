@@ -622,7 +622,8 @@ if __name__ == "__main__":
                         window_sizes=window_sizes,
                             head_dim=head_dim,
                             hard_enforce_stations=True).to(device)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
+    if is_distributed():
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
 
     # Define the loss criterion and metric here, based on input loss name. The functions are sent to the GPU inside
     if loss_name == "MaskedMSELoss":
