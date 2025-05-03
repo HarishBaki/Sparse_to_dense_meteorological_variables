@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# DCNN and all variables are not submitted. 
+variables=("si10" "t2m" "sh2")
 models=("DCNN" "UNet" "SwinT2UNet")
 orographies=("false" "true")
 add_vars=("si10" "si10,t2m" "si10,t2m,sh2")
@@ -7,7 +8,7 @@ years=("2018" "2018,2019" "2018,2020")
 n_stations=("50" "75" "100")
 
 for model in "${models[@]}"; do
-  for yrs in "${years[@]}"; do
+  for var in "${variables[@]}"; do
           sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=ddp_train
@@ -31,13 +32,13 @@ export MASTER_PORT=\$((20000 + RANDOM % 20000))
 
 torchrun --nproc_per_node=\$nproc_per_node --master_port=\$MASTER_PORT train.py \
   --checkpoint_dir checkpoints \
-  --variable i10fg \
+  --variable $var \
   --model $model \
   --orography_as_channel 'true' \
   --additional_input_variables 'none' \
-  --train_years_range $yrs \
+  --train_years_range '2018,2021' \
   --global_seed 42 \
-  --n_random_stations none \
+  --n_random_stations 'none' \
   --loss MaskedCharbonnierLoss \
   --transform standard \
   --epochs 120 \
