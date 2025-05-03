@@ -297,6 +297,33 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
 # %%
 if __name__ == "__main__":      
     # This is the main entry point of the script. 
+
+    # === Args for interactive debugging ===
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
+
+    # If run interactively, inject some sample arguments
+    if is_interactive() or len(sys.argv) == 1:
+        sys.argv = [
+            "",  # The first arg is the script name
+            "--checkpoint_dir", "checkpoints",
+            "--variable", "i10fg",
+            "--model", "DCNN",
+            "--orography_as_channel", 'true', 
+            "--additional_input_variables", 'none',
+            "--train_years_range", "2018,2021",
+            "--global_seed", "42",
+            "--n_random_stations", "50",
+            "--loss", "MaskedCharbonnierLoss",
+            "--transform", "standard",
+            "--epochs", "2",
+            "--batch_size", "16",
+            "--num_workers", "32",
+            "--wandb_id", 'none',
+        ]
+        print("DEBUG: Using injected args:", sys.argv)
+
     # === Argparse and DDP setup ===
     parser = argparse.ArgumentParser(description="Train with DDP")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Directory to save checkpoints")
@@ -419,7 +446,7 @@ if __name__ == "__main__":
     f"  device: {device}\n"
     f"  resume: {resume}\n"
     )
-    
+    '''
     # %%
     # === Loading some topography and masking data ===
     orography = xr.open_dataset('orography.nc').orog
@@ -719,7 +746,7 @@ if __name__ == "__main__":
         variable = variable, 
         target_transform = target_transform
     )
-    
+    '''
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
