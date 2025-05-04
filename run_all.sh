@@ -10,6 +10,6 @@ n_stations=("50" "75" "100")
 for model in "${models[@]}"; do
   for variable in "${variables[@]}"; do
       export variable model
-      sbatch --export=All python_jobsub.slurm
+      sbatch --export=All python_jobsub.slurm   # bash python_jobsub.slurm for bash script.
   done
 done
