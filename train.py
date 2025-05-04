@@ -30,6 +30,8 @@ from models.SwinT2_UNet import SwinT2UNet
 
 from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnierLoss
 
+from sampler import DistributedEvalSampler
+
 def str_or_none(v):
     return None if v.lower() == 'none' else v
 
@@ -69,9 +71,21 @@ def save_model_checkpoint(model, optimizer,scheduler, epoch, path):
     torch.save(checkpoint, path)
     print(f" Model checkpoint saved at: {path}")
 
+def strip_ddp_prefix(state_dict):
+    """Remove 'module.' prefix if loading DDP model into non-DDP."""
+    return {k.replace("module.", ""): v for k, v in state_dict.items()}
+
 def restore_model_checkpoint(model, optimizer, scheduler, path, device="cuda"):
     checkpoint = torch.load(path, map_location=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    state_dict = checkpoint["model_state_dict"]
+    try:
+        model.load_state_dict(state_dict)
+    except RuntimeError:
+        # Try stripping 'module.' prefix
+        print("Warning: DDP prefix found, attempting to strip 'module.' from keys...")
+        state_dict = strip_ddp_prefix(state_dict)
+        model.load_state_dict(state_dict)
+    
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
     start_epoch = checkpoint["epoch"] + 1
@@ -220,18 +234,13 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
                checkpoint_dir, variable , target_transform=None):
     # load the best model Handle DDP 'module.' prefix
     best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
-    checkpoint = torch.load(best_ckpt_path, map_location=device)
-    state_dict = checkpoint["model_state_dict"]
-    model.load_state_dict(state_dict)
+    model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
 
     # === Creating a zarr for test data ===
     dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
     zarr_store = os.path.join(checkpoint_dir, "RTMA_test.zarr")
-    if not dist.is_initialized() or dist.get_rank() == 0:   # Initialize only on rank 0 and wait for others
-        init_zarr_store(zarr_store, dates, variable)
-        print(f"Zarr store initialized at {zarr_store}.")
-    if dist.is_initialized():
-        dist.barrier()  # All other ranks wait here until rank 0 finishes
+    init_zarr_store(zarr_store, dates, variable)
+    print(f"Zarr store initialized at {zarr_store}.")
 
     # === Step 2: Evaluate and write predictions using matched time indices ===
     ds = xr.open_zarr(zarr_store, consolidated=False)
@@ -246,7 +255,7 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     model.eval()
     test_loss_total = 0.0
     test_metric_total = 0.0
-    show_progress = not dist.is_initialized() or dist.get_rank() == 0
+    show_progress = True
     test_bar = tqdm(test_dataloader, desc=f"[Test]", leave=False) if show_progress else test_dataloader
     with torch.no_grad():
         for batch in test_bar:
@@ -290,9 +299,7 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     avg_test_metric = test_metric_total / len(test_dataloader)
     print(f"Test Loss: {avg_test_loss:.4f} | Test Metric: {avg_test_metric:.4f}")
     
-    # Log the test loss and metric to Weights & Biases
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
+    wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
 
 # %%
 if __name__ == "__main__":      
@@ -310,11 +317,11 @@ if __name__ == "__main__":
             "--checkpoint_dir", "checkpoints",
             "--variable", "i10fg",
             "--model", "DCNN",
-            "--orography_as_channel", 'true', 
+            "--orography_as_channel", 'false', 
             "--additional_input_variables", 'none',
             "--train_years_range", "2018,2021",
             "--global_seed", "42",
-            "--n_random_stations", "50",
+            "--n_random_stations", "none",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--epochs", "2",
@@ -445,8 +452,9 @@ if __name__ == "__main__":
     f"  wandb_id: {args.wandb_id}\n"
     f"  device: {device}\n"
     f"  resume: {resume}\n"
+    f"  Training on distrbuuted: {is_distributed()}\n"
     )
-    '''
+    
     # %%
     # === Loading some topography and masking data ===
     orography = xr.open_dataset('orography.nc').orog
@@ -647,11 +655,11 @@ if __name__ == "__main__":
     if not dist.is_initialized() or dist.get_rank() == 0:
         if args.wandb_id is not None:
             wandb.init(
-                project="sparse-to-dense",id=args.wandb_id,resume='allow',
+                project="Testing",id=args.wandb_id,resume='allow',
             )
         else:
             wandb.init(
-                project="Sparse-to-Dense",
+                project="Testing",
                 name=checkpoint_dir[len('checkpoints/'):].replace('/','_'),
                 config={
                     "variable": variable,
@@ -674,7 +682,7 @@ if __name__ == "__main__":
                     "orography_as_channel": orography_as_channel,
                 }
             )
-    
+    '''
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -699,55 +707,55 @@ if __name__ == "__main__":
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    
-    # === Run the test and save the outputs to zarr ===
-    test_dates_range = ['2023-01-01T00', '2023-12-31T23']
-    test_dataset = RTMA_sparse_to_dense_Dataset(
-        zarr_store,
-        input_variables_in_order,
-        orography_as_channel,
-        test_dates_range,
-        orography,
-        RTMA_lat,
-        RTMA_lon,
-        nysm_latlon,
-        y_indices,
-        x_indices,
-        mask,
-        missing_times,
-        input_transform=input_transform,
-        target_transform=target_transform
-    )
-    if is_distributed():
-        test_sampler = DistributedSampler(test_dataset)
-    else:
-        test_sampler = None
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False, # shuffle if not using DDP
-        sampler=test_sampler,
-        pin_memory=True,
-        num_workers=num_workers
-    )
-    if not dist.is_initialized() or dist.get_rank() == 0:
-            print("Test data loaded successfully.")
-            print(f"Test dataset size: {len(test_dataset)}")
-
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print("Starting Testing...")
-    run_test(
-        model = model, 
-        test_dataloader = test_dataloader,
-        test_dates_range = test_dates_range,
-        criterion = criterion,
-        metric = metric,
-        device = device,
-        checkpoint_dir = checkpoint_dir,
-        variable = variable, 
-        target_transform = target_transform
-    )
     '''
+    # === Run the test and save the outputs to zarr ===
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    if rank == 0:
+        test_dates_range = ['2023-01-01T00', '2023-12-31T23']
+        test_dataset = RTMA_sparse_to_dense_Dataset(
+            zarr_store,
+            input_variables_in_order,
+            orography_as_channel,
+            test_dates_range,
+            orography,
+            RTMA_lat,
+            RTMA_lon,
+            nysm_latlon,
+            y_indices,
+            x_indices,
+            mask,
+            missing_times,
+            input_transform=input_transform,
+            target_transform=target_transform
+        )
+        test_sampler = None
+        test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False, # shuffle if not using DDP
+            sampler=test_sampler,
+            pin_memory=True,
+            num_workers=num_workers,
+            drop_last=False
+        )
+
+        print("Test data loaded successfully.")
+        print(f"Test dataset size: {len(test_dataset)}")
+
+
+        print("Starting Testing...")
+        run_test(
+            model = model, 
+            test_dataloader = test_dataloader,
+            test_dates_range = test_dates_range,
+            criterion = criterion,
+            metric = metric,
+            device = device,
+            checkpoint_dir = checkpoint_dir,
+            variable = variable, 
+            target_transform = target_transform
+        )
+    
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         wandb.finish()
