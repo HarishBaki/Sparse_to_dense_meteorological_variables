@@ -725,7 +725,7 @@ if __name__ == "__main__":
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
-        shuffle=(test_sampler is None), # shuffle if not using DDP
+        shuffle=False, # shuffle if not using DDP
         sampler=test_sampler,
         pin_memory=True,
         num_workers=num_workers
