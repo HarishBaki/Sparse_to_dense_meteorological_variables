@@ -89,6 +89,7 @@ _, indices_flat = tree.query(nysm_latlon)
 y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
 
 # %%
+'''
 ds = xr.open_zarr(source_zarr_store, chunks={'time': 24})[var_name].sel(time=dates)
 sample = ds.isel(time=2000)
 station_values = sample.values[y_indices, x_indices]
@@ -106,6 +107,7 @@ interp = xr.DataArray(
     }
 )
 interp.plot()
+'''
 # %%
 chunk_size = 24
 n_jobs = 60  # 2 threads per chunk, parallel across 60 chunks
