@@ -57,6 +57,9 @@ echo "NProc per node:          $nproc_per_node"
 echo "Master port:             $MASTER_PORT"
 echo "----------------------------------------"
 
+# Install required Python packages inside the container
+pip install --quiet torchmetrics
+
 torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
