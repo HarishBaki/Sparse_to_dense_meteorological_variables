@@ -89,6 +89,24 @@ _, indices_flat = tree.query(nysm_latlon)
 y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
 
 # %%
+ds = xr.open_zarr(source_zarr_store, chunks={'time': 24})[var_name].sel(time=dates)
+sample = ds.isel(time=2000)
+station_values = sample.values[y_indices, x_indices]
+interp_flat = interpolate_to_points(
+    nysm_latlon, station_values, grid_points, interp_type='barnes', 
+    #gamma=0.1, minimum_neighbors=1,kappa_star=10,
+)
+interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
+interp = xr.DataArray(
+    interp,
+    dims=['y', 'x'],
+    coords={
+        'latitude': (['y', 'x'], RTMA_lat),
+        'longitude': (['y', 'x'], RTMA_lon)
+    }
+)
+interp.plot()
+# %%
 chunk_size = 24
 n_jobs = 60  # 2 threads per chunk, parallel across 60 chunks
 ds = xr.open_zarr(source_zarr_store, chunks={'time': chunk_size})[var_name].sel(time=dates)
