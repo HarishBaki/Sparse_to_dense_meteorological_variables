@@ -182,5 +182,4 @@ slurmout/
 checkpoints/
 checkpoints_/
 wandb/
-Figures/
 physicsnemo:25.03.tar
