@@ -1,0 +1,13 @@
+Experiment,Metric,Value
+all-stations,masked_rmse,1.3434224128723145
+all-stations,masked_psnr,33.16462326049805
+all-stations,masked_ssim,0.9324865937232971
+100-random-stations,masked_rmse,1.3434224128723145
+100-random-stations,masked_psnr,33.16462326049805
+100-random-stations,masked_ssim,0.9324865937232971
+75-random-stations,masked_rmse,1.3434224128723145
+75-random-stations,masked_psnr,33.16462326049805
+75-random-stations,masked_ssim,0.9324865937232971
+50-random-stations,masked_rmse,1.3434224128723145
+50-random-stations,masked_psnr,33.16462326049805
+50-random-stations,masked_ssim,0.9324865937232971
