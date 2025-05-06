@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torchmetrics.image import PeakSignalNoiseRatio
+from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 class MaskedMSELoss(nn.Module):
     """
@@ -20,7 +22,7 @@ class MaskedMSELoss(nn.Module):
         """
         output: [B, 1, H, W]
         target: [B, 1, H, W]
-        station_mask: [B, H, W]  (1=station, 0=else)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
         """
         B, _, H, W = output.shape
         mask = self.mask_2d.unsqueeze(0).unsqueeze(0)       # [1, 1, H, W], device-matched
@@ -92,7 +94,7 @@ class MaskedTVLoss(nn.Module):
     def forward(self, x, station_mask):
         """
         x: [B, 1, H, W] (predicted field)
-        station_mask: [B, H, W] (1=station, 0=else)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
         """
         B, _, H, W = x.shape
         mask = self.mask_2d.unsqueeze(0).unsqueeze(0)       # [1, 1, H, W]
@@ -129,7 +131,7 @@ class MaskedCharbonnierLoss(nn.Module):
         """
         x: [B, 1, H, W] (prediction)
         y: [B, 1, H, W] (target)
-        station_mask: [B, H, W] (1=station, 0=else)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
         """
         B, _, H, W = x.shape
         mask = self.mask_2d.unsqueeze(0).unsqueeze(0)       # [1, 1, H, W]
@@ -141,3 +143,57 @@ class MaskedCharbonnierLoss(nn.Module):
         masked_charb = charbonnier * valid_mask
         loss = masked_charb.sum() / valid_mask.sum().clamp(min=1.0)
         return loss
+
+class MaskedPSNR(nn.Module):
+    """
+    Peak Signal-to-Noise Ratio (PSNR) loss, only over valid (masked) locations.
+    """
+    def __init__(self, mask_2d):
+        """
+        mask_2d: torch.Tensor [H, W] (1=inside NY, 0=outside NY)
+        """
+        super().__init__()
+        self.register_buffer("mask_2d", mask_2d.float())   # persists on .cuda()/.cpu(), such that the mask_2d devie is used.
+        self.psnr = PeakSignalNoiseRatio()
+
+    def forward(self, x, y, station_mask):
+        """
+        x: [B, 1, H, W] (prediction)
+        y: [B, 1, H, W] (target)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
+        """
+        B, _, H, W = x.shape
+        mask = self.mask_2d.unsqueeze(0).unsqueeze(0)       # [1, 1, H, W]
+        station_mask = station_mask.float()     # [B, 1, H, W]
+        valid_mask = (mask == 1) & (station_mask == 0)       # [B, 1, H, W]
+
+        x = x * mask
+        y = y * mask
+        return self.psnr(x, y)
+    
+class MaskedSSIM(nn.Module):
+    """
+    Structural Similarity Index Measure (SSIM) loss, only over valid (masked) locations.
+    """
+    def __init__(self, mask_2d):
+        """
+        mask_2d: torch.Tensor [H, W] (1=inside NY, 0=outside NY)
+        """
+        super().__init__()
+        self.register_buffer("mask_2d", mask_2d.float())   # persists on .cuda()/.cpu(), such that the mask_2d devie is used.
+        self.ssim = StructuralSimilarityIndexMeasure()
+
+    def forward(self, x, y, station_mask):
+        """
+        x: [B, 1, H, W] (prediction)
+        y: [B, 1, H, W] (target)
+        station_mask: [B, 1, H, W]  (1=station, 0=else)
+        """
+        B, _, H, W = x.shape
+        mask = self.mask_2d.unsqueeze(0).unsqueeze(0)       # [1, 1, H, W]
+        station_mask = station_mask.float()     # [B, 1, H, W]
+        valid_mask = (mask == 1) & (station_mask == 0)       # [B, 1, H, W]
+
+        x = x * valid_mask
+        y = y * valid_mask
+        return self.ssim(x, y)
