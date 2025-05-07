@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from util import initialize_weights_xavier,initialize_weights_He
 
 # %%
 class DCNN(nn.Module):
@@ -21,7 +22,7 @@ class DCNN(nn.Module):
     Returns:
     - output (Tensor): Output tensor after passing through the network.
     '''
-    def __init__(self, in_channels, out_channels, C=48,kernel=(7,7),final_kernel=(3,3),n_layers=7,hard_enforce_stations=False):
+    def __init__(self, in_channels, out_channels, C=48,kernel=(7,7),final_kernel=(3,3),n_layers=7,act_layer=nn.ReLU,hard_enforce_stations=False):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -40,7 +41,7 @@ class DCNN(nn.Module):
                 out_channels = self.C
             self.blocks.append(nn.Sequential(
                 nn.Conv2d(in_channels, out_channels, kernel_size=kernel, padding=(kernel[0] // 2, kernel[1] // 2)),
-                nn.ReLU(inplace=True)
+                act_layer()
             ))
         self.final_conv = nn.Conv2d(C, self.out_channels, kernel_size=self.final_kernel, padding=1)
 
@@ -54,10 +55,17 @@ class DCNN(nn.Module):
         if self.hard_enforce_stations:
             x = station_mask * station_values + (1-station_mask)*x
         return x
+
 # %%
 if __name__ == "__main__":
     # Example usage
-    model = DCNN(in_channels=3, out_channels=1, C=48, kernel=(7, 7),final_kernel=(3,3), n_layers=7,hard_enforce_stations=True)
+    act_layer = nn.GELU
+    seed = 42
+    model = DCNN(in_channels=3, out_channels=1, C=48, kernel=(7, 7),final_kernel=(3,3), n_layers=7,act_layer=act_layer,hard_enforce_stations=True)
+    if act_layer == nn.GELU:
+        initialize_weights_xavier(model,seed = seed)
+    elif act_layer == nn.ReLU:
+        initialize_weights_He(model,seed = seed)
     print(model)  # Print the model architecture
     # print the total number of parameters in the model
     print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
@@ -68,3 +76,7 @@ if __name__ == "__main__":
     Already examined the model architecture, intermediate outputs shape and the final output shape.
     The shape is retained from from end to end.
     '''  
+    # Print weights of the first conv layer
+    first_conv_layer = model.blocks[0][0]  # First nn.Conv2d inside the first block
+    print("Weights of the first Conv2d layer:")
+    print(first_conv_layer.weight.data)
