@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from timm.models.swin_transformer_v2 import SwinTransformerV2Block
+from util import initialize_weights_xavier,initialize_weights_he
 
 def bchw_to_bhwc(input: torch.Tensor) -> torch.Tensor:
     """
@@ -41,7 +42,7 @@ class InputProj(nn.Module):
         # Input projection
         self.proj = nn.Sequential(
             nn.Conv2d(self.in_channels, self.out_channels, self.kernel_size, stride=self.stride, padding=self.kernel_size//2),
-            act_layer(inplace=True)
+            act_layer()
         )
         if norm_layer is not None:
             self.norm = norm_layer(self.out_channels)
@@ -71,7 +72,7 @@ class OutputProj(nn.Module):
             nn.Conv2d(self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.stride, padding=self.kernel_size//2),
         )
         if act_layer is not None:
-            self.proj.add_module(act_layer(inplace=True))
+            self.proj.add_module(act_layer())
         if norm_layer is not None:
             self.norm = norm_layer(self.out_channels)
         else:
@@ -119,7 +120,9 @@ class UpSample(nn.Module):
         return x    # Output shape is B H W C
 
 class Encoder(nn.Module):
-    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4, ):
+    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4, 
+                 attn_drop=0.2, proj_drop=0.2,mlp_ratio=4.0,act_layer=nn.GELU):
+
         super().__init__()
         self.input_resolution = input_resolution
         self.C = C
@@ -145,11 +148,11 @@ class Encoder(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU),
+                act_layer=act_layer),
                 SwinTransformerV2Block(
                 dim=dim, 
                 input_resolution=input_resolution,
@@ -157,11 +160,11 @@ class Encoder(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU)))
+                act_layer=act_layer)))
             # Downsample block
             self.downs.append(DownSample(in_channels=input_channels, out_channels=out_channels))
 
@@ -175,7 +178,8 @@ class Encoder(nn.Module):
         return x, skip_connections
 
 class Bottleneck(nn.Module):
-    def __init__(self, C, input_resolution, n_layers=4,head_dim=32, window_sizes=[8,8,4,4,2]):
+    def __init__(self, C, input_resolution, n_layers=4,head_dim=32, window_sizes=[8,8,4,4,2], 
+                 attn_drop=0.2, proj_drop=0.2,mlp_ratio=4.0,act_layer=nn.GELU):
         super().__init__()
         self.C = C
         self.input_resolution = input_resolution
@@ -195,11 +199,11 @@ class Bottleneck(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU),
+                act_layer=act_layer),
                 SwinTransformerV2Block(
                 dim=dim, 
                 input_resolution=input_resolution,
@@ -207,11 +211,11 @@ class Bottleneck(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU))
+                act_layer=act_layer))
         
     def forward(self, x):
         # Input shape is B H W C
@@ -219,7 +223,8 @@ class Bottleneck(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4):
+    def __init__(self, input_resolution = (256,288), C=32, window_sizes = [8,8,4,4], head_dim=32, n_layers=4,
+                 attn_drop=0.2, proj_drop=0.2,mlp_ratio=4.0,act_layer=nn.GELU):
         super().__init__()
         self.input_resolution = input_resolution
         self.C = C
@@ -250,11 +255,11 @@ class Decoder(nn.Module):
                 window_size=window_size,
                 shift_size=0,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU),
+                act_layer=act_layer),
                 SwinTransformerV2Block(
                 dim=dim, 
                 input_resolution=input_resolution,
@@ -262,11 +267,11 @@ class Decoder(nn.Module):
                 window_size=window_size,
                 shift_size=window_size//2,
                 qkv_bias=True,
-                attn_drop=0.2,
-                proj_drop=0.2,
-                mlp_ratio=4.0,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
+                mlp_ratio=mlp_ratio,
                 norm_layer=nn.LayerNorm,
-                act_layer=nn.GELU)))
+                act_layer=act_layer)))
 
     def forward(self, x,skip_connections):
         # Input shape is B H W C
@@ -292,7 +297,8 @@ class SwinT2UNet(nn.Module):
     - hard_enforce_stations (bool): If True, enforces station values in the output. Technically, the output will have station values at the station locations.
     '''
 
-    def __init__(self, input_resolution=(256,288), in_channels=3, out_channels=1, C=32, n_layers=4,window_sizes=[8,8,4,4], head_dim=32,hard_enforce_stations=False):
+    def __init__(self, input_resolution=(256,288), in_channels=3, out_channels=1, C=32, n_layers=4, attn_drop=0.2, proj_drop=0.2,mlp_ratio=4.0,act_layer=nn.GELU,
+                 window_sizes=[8,8,4,4], head_dim=32,hard_enforce_stations=False):
         super().__init__()
         self.input_resolution = input_resolution
         self.in_channels = in_channels
@@ -301,11 +307,14 @@ class SwinT2UNet(nn.Module):
         self.n_layers = n_layers
         self.window_sizes = window_sizes
         self.head_dim = head_dim
-        self.input_proj = InputProj(in_channels, C)
+        self.input_proj = InputProj(in_channels, C,act_layer=act_layer)
         self.hard_enforce_stations = hard_enforce_stations
-        self.encoder = Encoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
-        self.bottleneck = Bottleneck(C=self.C, input_resolution=self.input_resolution, n_layers=self.n_layers, window_sizes=self.window_sizes, head_dim=self.head_dim)
-        self.decoder = Decoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers)
+        self.encoder = Encoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers,
+                               attn_drop=attn_drop, proj_drop=proj_drop,mlp_ratio=mlp_ratio,act_layer=act_layer)
+        self.bottleneck = Bottleneck(C=self.C, input_resolution=self.input_resolution, n_layers=self.n_layers, window_sizes=self.window_sizes, head_dim=self.head_dim,
+                                     attn_drop=attn_drop, proj_drop=proj_drop,mlp_ratio=mlp_ratio,act_layer=act_layer)
+        self.decoder = Decoder(input_resolution=self.input_resolution, C=self.C, window_sizes=self.window_sizes, head_dim=self.head_dim, n_layers=self.n_layers,
+                               attn_drop=attn_drop, proj_drop=proj_drop,mlp_ratio=mlp_ratio,act_layer=act_layer)
         self.output_proj = OutputProj(in_channels=self.C, out_channels=self.out_channels)
         
     def forward(self, x):
@@ -332,13 +341,26 @@ if __name__ == "__main__":
     n_layers = 4
     window_sizes = [8, 8, 4, 4, 2]
     head_dim = 32
+    attn_drop = 0.2
+    proj_drop = 0.2
+    mlp_ratio = 4.0
+    act_layer = nn.GELU
+    seed = 42
     model = SwinT2UNet(input_resolution=input_resolution, 
-                       in_channels=in_channels, 
-                       out_channels=out_channels, 
-                       C=C, n_layers=n_layers, 
-                       window_sizes=window_sizes,
-                         head_dim=head_dim,
-                         hard_enforce_stations=True)
+                        in_channels=in_channels, 
+                        out_channels=out_channels, 
+                        C=C, n_layers=n_layers, 
+                        window_sizes=window_sizes,
+                        head_dim=head_dim,
+                        attn_drop=attn_drop,
+                        proj_drop=proj_drop,
+                        mlp_ratio=mlp_ratio,
+                        act_layer=act_layer,
+                        hard_enforce_stations=True)
+    if act_layer == nn.GELU:
+        initialize_weights_xavier(model,seed = seed)
+    elif act_layer == nn.ReLU:
+        initialize_weights_he(model,seed = seed)
     print(model)  # Print the model architecture
     # print the total number of parameters in the model
     print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
@@ -347,4 +369,8 @@ if __name__ == "__main__":
     print(x.shape)  # Should be (1, 3, 256, 288)
     output = model(x)
     print(output.shape)  # Should be (1, 1, 256, 288)
+    # Print weights of the first conv layer
+    first_conv_layer = model.input_proj.proj[0]  # First nn.Conv2d inside the first block
+    print("Weights of the first Conv2d layer:")
+    print(first_conv_layer.weight.data)
 # %%
