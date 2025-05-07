@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from util import initialize_weights_xavier,initialize_weights_He
+from util import initialize_weights_xavier,initialize_weights_he
 
 # %%
 class DCNN(nn.Module):
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     if act_layer == nn.GELU:
         initialize_weights_xavier(model,seed = seed)
     elif act_layer == nn.ReLU:
-        initialize_weights_He(model,seed = seed)
+        initialize_weights_he(model,seed = seed)
     print(model)  # Print the model architecture
     # print the total number of parameters in the model
     print(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}')
