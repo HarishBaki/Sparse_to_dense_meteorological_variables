@@ -2,7 +2,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from util import initialize_weights_xavier,initialize_weights_he
 
 # %%
 class DCNN(nn.Module):
@@ -58,6 +57,7 @@ class DCNN(nn.Module):
 
 # %%
 if __name__ == "__main__":
+    from util import initialize_weights_xavier,initialize_weights_he
     # Example usage
     act_layer = nn.GELU
     seed = 42

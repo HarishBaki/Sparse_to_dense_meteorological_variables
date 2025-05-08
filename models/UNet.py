@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.layers import DropPath
-from util import initialize_weights_xavier,initialize_weights_he
 
 # %%
 class ConvBlock(nn.Module):
@@ -136,6 +135,7 @@ class UNet(nn.Module):
     
 # %%    
 if __name__ == "__main__":
+    from util import initialize_weights_xavier,initialize_weights_he
     act_layer = nn.ReLU
     seed = 42
     model = UNet(in_channels=3, out_channels=1, C=32, dropout_prob=0.2,drop_path_prob=0.2,act_layer=act_layer,n_layers=4,hard_enforce_stations=True)

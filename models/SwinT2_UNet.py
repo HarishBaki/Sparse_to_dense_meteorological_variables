@@ -11,7 +11,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from timm.models.swin_transformer_v2 import SwinTransformerV2Block
-from util import initialize_weights_xavier,initialize_weights_he
 
 def bchw_to_bhwc(input: torch.Tensor) -> torch.Tensor:
     """
@@ -333,6 +332,7 @@ class SwinT2UNet(nn.Module):
 
 # %%
 if __name__ == "__main__":
+    from util import initialize_weights_xavier,initialize_weights_he
     # Example usage
     input_resolution = (256, 288)
     in_channels = 3
