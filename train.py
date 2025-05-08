@@ -27,6 +27,7 @@ from models.Google_Unet import GoogleUNet
 from models.Deep_CNN import DCNN
 from models.UNet import UNet
 from models.SwinT2_UNet import SwinT2UNet
+from models.util import initialize_weights_xavier,initialize_weights_he
 
 from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnierLoss
 
@@ -355,7 +356,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for DataLoader")
     parser.add_argument("--wandb_id", type=str_or_none, default=None, help="WandB run ID for resuming, not passing will create a new run")
     parser.add_argument("--resume", action="store_true", 
-                        help="Resume from latest checkpoint (just passing --resume is enough for resume)") 
+                        help="Resume from latest checkpoint (just passing --resume is enough for resume)")
+    parser.add_argument("--weights_seed", type=int, default=42, help="Seed for weight initialization")
+    parser.add_argument("--activation_layer", type=str, default="gelu", 
+                        help="Activation layer to use ('gelu', 'relu', 'leakyrelu')") 
     args, unknown = parser.parse_known_args()
 
     # %%
@@ -404,6 +408,11 @@ if __name__ == "__main__":
 
     transform = args.transform
     checkpoint_dir = checkpoint_dir+'/'+transform
+
+    activation_layer = args.activation_layer
+    weights_seed = args.weights_seed
+
+    checkpoint_dir = checkpoint_dir+'/'+activation_layer+'-'+str(weights_seed)
     
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -452,6 +461,8 @@ if __name__ == "__main__":
     f"  wandb_id: {args.wandb_id}\n"
     f"  device: {device}\n"
     f"  resume: {resume}\n"
+    f"  weights_seed: {weights_seed}\n"
+    f"  activation_layer: {activation_layer}\n"
     f"  Training on distrbuuted: {is_distributed()}\n"
     )
     
@@ -598,6 +609,14 @@ if __name__ == "__main__":
     else:
         in_channels = len(input_variables_in_order) + 1 # input variables + station mask
     out_channels = 1
+
+    if activation_layer == 'gelu':
+        act_layer = nn.GELU
+    elif activation_layer == 'relu':
+        act_layer = nn.ReLU
+    elif activation_layer == 'leakyrelu':
+        act_layer = nn.LeakyReLU
+
     if model_name == "DCNN":
         C = 48
         kernel = (7, 7)
@@ -609,27 +628,49 @@ if __name__ == "__main__":
                         kernel=kernel,
                         final_kernel=final_kernel, 
                         n_layers=n_layers,
+                        act_layer=act_layer,
                         hard_enforce_stations=True).to(device)
     elif model_name == "UNet":
         C = 32
         n_layers = 4
+        dropout_prob=0.2
+        drop_path_prob=0.2
         model = UNet(in_channels=in_channels, 
                         out_channels=out_channels,
                         C=C, 
+                        dropout_prob=dropout_prob,
+                        drop_path_prob=drop_path_prob,
+                        act_layer=act_layer,
                         n_layers=n_layers,
                         hard_enforce_stations=True).to(device)
+    
     elif model_name == "SwinT2UNet":
         C = 32
         n_layers = 4
         window_sizes = [8, 8, 4, 4, 2]
         head_dim = 32
+        attn_drop = 0.2
+        proj_drop = 0.2
+        mlp_ratio = 4.0
         model = SwinT2UNet(input_resolution=input_resolution, 
                         in_channels=in_channels, 
                         out_channels=out_channels, 
                         C=C, n_layers=n_layers, 
                         window_sizes=window_sizes,
                             head_dim=head_dim,
+                            attn_drop=attn_drop,
+                            proj_drop=proj_drop,
+                            mlp_ratio=mlp_ratio,
+                            act_layer=act_layer,
                             hard_enforce_stations=True).to(device)
+    
+    if act_layer == nn.GELU:
+            initialize_weights_xavier(model,seed = weights_seed)
+    elif act_layer == nn.ReLU:
+        initialize_weights_he(model,seed = weights_seed)
+    elif act_layer == nn.LeakyReLU:
+        initialize_weights_he(model,seed = weights_seed)
+
     if is_distributed():
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
 
@@ -680,9 +721,11 @@ if __name__ == "__main__":
                     "global_seed": global_seed,
                     "n_random_stations": n_random_stations,
                     "orography_as_channel": orography_as_channel,
+                    "activation_layer": args.activation_layer,
+                    "weights_seed": args.weights_seed,
                 }
             )
-    '''
+    
     # === Run the training and validation ===
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Starting training and validation...")
@@ -707,7 +750,7 @@ if __name__ == "__main__":
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    '''
+    
     # === Run the test and save the outputs to zarr ===
     rank = dist.get_rank() if dist.is_initialized() else 0
     if rank == 0:
