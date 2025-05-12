@@ -18,7 +18,7 @@ ds = xr.open_dataset('/data/NYSM/Meteo_5min/Meteo_5min_gapfilled.nc')
 # %%
 ds_subset = ds[['latitude','longitude',
          'temp_2m','relative_humidity','dewpoint','station_pressure',
-         'avg_wind_speed_prop_sonic','max_wind_speed_merge']]
+         'avg_wind_speed_prop_sonic','max_wind_speed_prop_sonic',]]
 
 # Quantify variables with units
 ds_q = ds_subset.metpy.quantify()
