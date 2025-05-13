@@ -229,6 +229,7 @@ if __name__ == "__main__":
     While, the Transform class is designed to extract based on the channel indices. For target, it will be [0].
     On the other hand, the RTMA_sparse_to_dense_Dataset class is designed to work with variable names, such that the first variable is the target variable. 
     '''
+    '''
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
     input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
@@ -372,4 +373,17 @@ if __name__ == "__main__":
         
         end_time = time.time()
         print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
+    '''
     # %%
+    # Loading the NYSM station data
+    NYSM = xr.open_dataset('data/NYSM.nc')
+    NYSM['longitude'] = (NYSM['longitude']+360) % 360   # this is needed to match the RTMA lon
+    NYSM_lat = NYSM.latitude.values
+    NYSM_lon = NYSM.longitude.values
+    # Precompute grid KDTree
+    station_points = np.stack([NYSM_lat.ravel(), NYSM_lon.ravel()], axis=-1)
+    tree = cKDTree(station_points)
+    # Query the station locations
+    _, station_indices = tree.query(nysm_latlon)
+    NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
+    NYSM = NYSM.sel(time=slice(dates_range[0], dates_range[1]))
