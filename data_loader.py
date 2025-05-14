@@ -182,6 +182,125 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         # Return input and target tensors
         return input_tensor, target_tensor, str(target.time.values)
 
+class NYSM_sparse_to_dense_Dataset(Dataset):
+    def __init__(self, ds,input_variables_in_order,orography_as_channel, dates_range, orography, 
+                 RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
+                 x_indices,station_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,global_seed=42):
+        '''
+        Custom dataset class for loading NYSM data.
+        This dataset is designed to work with the NYSM data stored in netcdf.
+        Parameters:
+        - ds: NYSM dataset.
+        - input_variables_in_order (list): Names of the variables to load from the Zarr store, in which the first one itself is the target. even for a single variable, it should be a list of length 1.
+        - orography_as_channel (bool): If True, orography is treated as a separate channel.
+        - dates_range (list): List containing start and end dates for filtering the data.
+        - orography (ndarray): Orography data for the region.
+        - RTMA_lat (ndarray): Latitude values for the RTMA grid.
+        - RTMA_lon (ndarray): Longitude values for the RTMA grid.
+        - nysm_latlon (ndarray): Latitude and longitude values for the NYSM stations.
+        - y_indices (ndarray): Y indices of the NYSM stations in the RTMA grid.
+        - x_indices (ndarray): X indices of the NYSM stations in the RTMA grid.
+        - station_indices (ndarray): Station indices of the NYSM stations in the NYSM shape.
+        - mask (ndarray): Mask for the RTMA grid.
+        - missing_times (ndarray): Array of missing times in the dataset.
+        - input_transform (callable, optional): Transformation to apply to the input data.
+        - target_transform (callable, optional): Transformation to apply to the target data.
+        - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
+        - global_seed (int, optional): Seed for random number generation.
+        Returns:
+        - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
+        - time_instance (str): Time instance of the data sample.
+        '''
+        self.input_transform = input_transform
+        self.target_transform = target_transform
+        self.input_variables_in_order = input_variables_in_order
+        self.orography_as_channel = orography_as_channel
+        self.dates_range = dates_range
+        self.RTMA_lat = RTMA_lat
+        self.RTMA_lon = RTMA_lon
+        self.orography = np.expand_dims(orography, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
+        self.mask = mask
+
+        # Check for the n_random_stations
+        if n_random_stations is not None:
+            # Randomly select n_random_stations from the NYSM stations
+            rng = np.random.default_rng(global_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
+            perm = rng.permutation(len(nysm_latlon))
+            #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
+            random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
+            # Update the y_indices and x_indices to the random stations
+            y_indices = y_indices[random_indices]
+            x_indices = x_indices[random_indices]
+            nysm_latlon = nysm_latlon[random_indices]
+            station_indices = station_indices[random_indices]
+        self.nysm_latlon = nysm_latlon
+        self.y_indices = y_indices
+        self.x_indices = x_indices
+        self.station_indices = station_indices
+        #print(f'nysm_latlon: {self.nysm_latlon.shape} {self.nysm_latlon}')
+        station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
+        station_mask[y_indices, x_indices] = 1  # Set 1 at the station locations
+        self.station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
+
+        # Pre-select the time range
+        ds = ds[input_variables_in_order] # this is needed, since we might be working with order of variables. 
+        ds = ds.sel(time=slice(dates_range[0], dates_range[1]))
+        #print(f"Total samples in the dataset: {len(ds.time)}")
+
+        # Filter the valid indices based on ds.time and missing_times
+        valid_times = ds["time"]
+        if missing_times is not None:
+            valid_times = valid_times.where(~ds["time"].isin(missing_times)) # this replaces the missing times with NaT. Thus, we need to deselect them without altering the coordinat, thus not to drop. 
+        self.valid_indices = np.where(~pd.isnull(valid_times.values))[0]    # valid_indices are the actual indices in ds, but omitted the missing times
+
+        #print(f"Total valid samples: {len(self.valid_indices)}")
+        self.ds = ds 
+
+    def __len__(self):
+        return len(self.valid_indices)
+    
+    def __getitem__(self, idx):
+        real_idx = self.valid_indices[idx]
+        input = self.ds[self.input_variables_in_order].isel(time=real_idx)  # an xarray Dataset, shape: [ y, x] with number of input variables. Cannot directly extract the values. 
+
+        # Grab station values from input for all input variables
+        inputs_interp = []
+        for i, var in enumerate(self.input_variables_in_order):
+            station_values = input[var].values[self.station_indices]
+            # check if any nans in the station values
+            if np.isnan(station_values).any():
+                print(f"NaN values in station values for {var} at index {real_idx}")
+            # Interpolate station values to full grid
+            interp = griddata(
+                self.nysm_latlon,
+                station_values,
+                (self.RTMA_lat, self.RTMA_lon),
+                method='nearest'
+            )
+            inputs_interp.append(interp)
+        # Stack the interpolated inputs
+        interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
+
+        if self.orography_as_channel:
+            # Combine inputs: interpolated + orography + station mask
+            input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+        else:
+            # combine inputs: interpolated + station mask
+            input_tensor = np.concatenate([interp, self.station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
+        
+        # Apply mask
+        input_tensor = np.where(self.mask, input_tensor, 0)
+
+        # Convert to torch tensors
+        input_tensor = torch.tensor(input_tensor, dtype=torch.float32)
+
+        # Apply transformations if provided
+        if self.input_transform is not None:
+            input_tensor = self.input_transform(input_tensor)
+
+        # Return input and target tensors
+        return input_tensor, str(input.time.values)
+
 # %%
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -211,7 +330,7 @@ if __name__ == "__main__":
 
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
-    orography_as_channel = False
+    orography_as_channel = True
     additional_input_variables = ['si10','t2m','sh2']
     dates_range = ['2023-11-09T06','2023-11-10T13']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
@@ -229,7 +348,7 @@ if __name__ == "__main__":
     While, the Transform class is designed to extract based on the channel indices. For target, it will be [0].
     On the other hand, the RTMA_sparse_to_dense_Dataset class is designed to work with variable names, such that the first variable is the target variable. 
     '''
-    '''
+    
     RTMA_stats = xr.open_dataset('RTMA_variable_stats.nc')
     input_variables_in_order = [variable] if additional_input_variables is None else [variable]+additional_input_variables  
     target_variables_in_order = [variable]
@@ -251,8 +370,8 @@ if __name__ == "__main__":
 
     # Now, setting up the random seed for reproducibility
     global_seed = 42    
-    n_random_stations = 50    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
-
+    n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
+    
     # %%
     # Examining the batches without transformations
     # compute time taken call dataset
@@ -373,7 +492,7 @@ if __name__ == "__main__":
         
         end_time = time.time()
         print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
-    '''
+    
     # %%
     # Loading the NYSM station data
     NYSM = xr.open_dataset('data/NYSM.nc')
@@ -386,7 +505,6 @@ if __name__ == "__main__":
     # Query the station locations
     _, station_indices = tree.query(nysm_latlon)
     NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-    NYSM = NYSM.sel(time=slice('2023-01-01T00:00', '2023-12-31T23:59')) #(time=slice(dates_range[0], dates_range[1]))
     NYSM = NYSM.resample(time='1h').nearest()
     
     missing_times = (NYSM[variable].isnull()).any(dim='station')
@@ -397,3 +515,115 @@ if __name__ == "__main__":
     missing_times = NYSM.time.where(missing_times).dropna(dim='time')
     print(f"Missing times shape: {missing_times.shape}")
 
+    # Examining the batches without transformations
+    # compute time taken call dataset
+    start_time = time.time()
+    # Create dataset instance
+    dataset = NYSM_sparse_to_dense_Dataset(
+        NYSM,
+        input_variables_in_order,
+        orography_as_channel,
+        dates_range,
+        orography,
+        RTMA_lat,
+        RTMA_lon,
+        nysm_latlon,
+        y_indices,
+        x_indices,
+        station_indices,
+        mask,
+        missing_times,
+        input_transform=None,
+        target_transform=None,
+        global_seed=global_seed,
+        n_random_stations=n_random_stations
+    )
+    end_time = time.time()
+    print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
+
+    start_time = time.time()
+    # Create a DataLoader
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
+    end_time = time.time()
+    print(f"Dataloader time: {end_time - start_time:.2f} seconds")
+
+    iterator = iter(dataloader)
+    # Example usage
+    for b in range(3):
+        start_time = time.time()
+        batch = next(iterator, None)
+
+        if batch is not None:
+            input_tensor, time_instance = batch
+            input_tensor = input_tensor.to(device)
+            
+            print(f"\n Batch {b+1}")
+            print("Input tensor shape:", input_tensor.shape)
+
+            for i in range(input_tensor.shape[1]):
+                print(f"Input Channel {i} ➜ max: {input_tensor[0, i].max().item():.4f}, min: {input_tensor[0, i].min().item():.4f}")
+
+        else:
+            print(f"Batch {b+1}: No data in this batch.")
+        
+        end_time = time.time()
+        print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
+
+    # Examining the batches with transformations
+    # compute time taken call dataset
+    start_time = time.time()
+    # Create dataset instance
+    dataset = NYSM_sparse_to_dense_Dataset(
+        NYSM,
+        input_variables_in_order,
+        orography_as_channel,
+        dates_range,
+        orography,
+        RTMA_lat,
+        RTMA_lon,
+        nysm_latlon,
+        y_indices,
+        x_indices,
+        station_indices,
+        mask,
+        missing_times,
+        input_transform=input_transform,
+        target_transform=target_transform,
+        global_seed=global_seed,
+        n_random_stations=n_random_stations
+    )
+    end_time = time.time()
+    print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
+
+    start_time = time.time()
+    # Create a DataLoader
+    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
+    end_time = time.time()
+    print(f"Dataloader time: {end_time - start_time:.2f} seconds")
+
+    iterator = iter(dataloader)
+    # Example usage
+    for b in range(3):
+        start_time = time.time()
+        batch = next(iterator, None)
+
+        if batch is not None:
+            input_tensor, time_instance = batch
+            input_tensor = input_tensor.to(device)
+            
+            print(f"\n Batch {b+1}")
+            print("Input tensor shape:", input_tensor.shape)
+
+            for i in range(input_tensor.shape[1]):
+                print(f"Input Channel {i} ➜ max: {input_tensor[0, i].max().item():.4f}, min: {input_tensor[0, i].min().item():.4f}")
+
+            # Inverse transform for input and target
+            input_tensor_inv = input_transform.inverse(input_tensor)     # shape: [B, 3, y, x]
+            for i in range(input_tensor.shape[1]):
+                print(f"Inverse Input Channel 0 ➜ max: {input_tensor_inv[0][i].max().item():.4f}, min: {input_tensor_inv[0][i].min().item():.4f}")
+
+        else:
+            print(f"Batch {b+1}: No data in this batch.")
+        
+        end_time = time.time()
+        print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
