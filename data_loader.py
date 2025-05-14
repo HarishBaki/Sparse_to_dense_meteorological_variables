@@ -212,7 +212,7 @@ if __name__ == "__main__":
     zarr_store = 'data/RTMA.zarr'
     variable = 'i10fg'
     orography_as_channel = False
-    additional_input_variables = None #['t2m','d2m','si10','sh2']
+    additional_input_variables = ['si10','t2m','sh2']
     dates_range = ['2023-11-09T06','2023-11-10T13']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
@@ -386,13 +386,14 @@ if __name__ == "__main__":
     # Query the station locations
     _, station_indices = tree.query(nysm_latlon)
     NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-    NYSM = NYSM.sel(time=slice(dates_range[0], dates_range[1]))
-
-    NYSM = NYSM.sel(time=slice('2023-01-01T00:00', '2023-12-31T00:00'))
-    NYSM = NYSM.resample(time='1H').nearest()
-    for var in NYSM.data_vars:
-        for i in range(110,len(NYSM['station'].values)):
-            #i = 116
-            print(var, i, NYSM['time'].where(NYSM[var].notnull().sum(dim='station')<=i).dropna(dim='time').shape)
-
+    NYSM = NYSM.sel(time=slice('2023-01-01T00:00', '2023-12-31T23:59')) #(time=slice(dates_range[0], dates_range[1]))
+    NYSM = NYSM.resample(time='1h').nearest()
+    
+    missing_times = (NYSM[variable].isnull()).any(dim='station')
+    # if the additional input variables is not none, add the missing times of the additional input variables also. 
+    if additional_input_variables is not None:
+        for var in additional_input_variables:
+            missing_times |= (NYSM[var].isnull()).any(dim='station')
+    missing_times = NYSM.time.where(missing_times).dropna(dim='time')
+    print(f"Missing times shape: {missing_times.shape}")
 
