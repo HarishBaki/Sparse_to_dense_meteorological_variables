@@ -10,10 +10,10 @@ from joblib import Parallel, delayed
 import os
 import dask.array as da
 import os, sys, time, glob, re
-
+# %%
 import metpy.calc as mpcalc
 from metpy.units import units
-
+# %%
 ds = xr.open_dataset('/data/NYSM/Meteo_5min/Meteo_5min_gapfilled.nc')
 # %%
 ds_subset = ds[['latitude','longitude',
