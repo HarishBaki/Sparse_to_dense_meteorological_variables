@@ -289,7 +289,7 @@ if __name__ == "__main__":
     # Query the station locations
     _, station_indices = tree.query(nysm_latlon)
     NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-    # If we want, we can resample the data to every hour, using NYSM = NYSM.resample(time='1h').nearest()
+    NYSM = NYSM.resample(time='1h').nearest()
 
     missing_times = (NYSM[variable].isnull()).any(dim='station')
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
