@@ -1,19 +1,33 @@
 #!/bin/bash
 
-#SBATCH --job-name=ddp_train
-#SBATCH --output=slurmout/ddp_train-%j.out
-#SBATCH --error=slurmout/ddp_train-%j.err
+#SBATCH --job-name=ddp_test
+#SBATCH --output=slurmout/ddp_test-%j.out
+#SBATCH --error=slurmout/ddp_test-%j.err
 #SBATCH --time=02-00:00:00
 #SBATCH --mem=160gb
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=2
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=32
-#SBATCH --exclude=dgx02
-# #SBATCH --container-image='docker://nvcr.io/nvidia/physicsnemo/physicsnemo:25.03'
-#SBATCH --container-image='/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh'
-#SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
-#SBATCH --container-workdir=/mnt/current_project
+# #SBATCH --exclude=dgx02 #only needed for dgx
+
+# ------------------ Dynamic Container Setup ------------------ #
+host=$(hostname)
+
+if [[ "$host" == dgx* || "$host" == uagc* || "$host" == node* ]]; then
+  export SLURM_CONTAINER_IMAGE="/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh"
+  export SLURM_CONTAINER_MOUNTS="/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project"
+  export SLURM_CONTAINER_WORKDIR="/mnt/current_project"
+else
+  export SLURM_CONTAINER_IMAGE="/home/harish/softwares/container_images/physicsnemo:25.03.sqsh"
+  export SLURM_CONTAINER_MOUNTS="/home/harish/Ongoing_Research/Sparse_to_dense_meteorological_variables:/workspace,/data/harish/Sparse_to_dense_meteorological_variables:/workspace/data"
+  export SLURM_CONTAINER_WORKDIR="/workspace"
+fi
+
+echo "Host: $host"
+echo "Using container: $SLURM_CONTAINER_IMAGE"
+echo "Mounts: $SLURM_CONTAINER_MOUNTS"
+echo "Workdir: $SLURM_CONTAINER_WORKDIR"
 
 # Optionally pass SLURM values into the shell script as environment variables
 export nproc_per_node=${SLURM_NTASKS_PER_NODE}
@@ -29,7 +43,7 @@ model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'false'}  # 'True' or 'False'
 additional_input_variables=${additional_input_variables:-'none'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
-global_seed=${global_seed:-42}
+stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
@@ -46,7 +60,7 @@ echo "Variable:                $variable"
 echo "Orography as channel:    $orography_as_channel"
 echo "Additional inputs:       $additional_input_variables"
 echo "Train years:             $train_years_range"
-echo "Global seed:             $global_seed"
+echo "Global seed:             $stations_seed"
 echo "Random stations:         $n_random_stations"
 echo "Loss:                    $loss"
 echo "Transform:               $transform"
@@ -64,7 +78,7 @@ echo "----------------------------------------"
 
 # Install required Python packages inside the container
 pip install --quiet torchmetrics
-
+: '
 torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_inference.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
@@ -72,7 +86,7 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_infere
 --orography_as_channel $orography_as_channel \
 --additional_input_variables $additional_input_variables \
 --train_years_range $train_years_range \
---global_seed $global_seed \
+--stations_seed $stations_seed \
 --n_random_stations $n_random_stations \
 --loss $loss \
 --transform $transform \
@@ -83,3 +97,4 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_infere
 --weights_seed $weights_seed \
 --activation_layer $activation_layer
 #--resume
+'

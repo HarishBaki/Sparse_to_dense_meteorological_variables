@@ -178,7 +178,7 @@ if __name__ == "__main__":
             "--orography_as_channel", 'false', 
             "--additional_input_variables", 'none',
             "--train_years_range", "2018,2021",
-            "--global_seed", "42",
+            "--stations_seed", "42",
             "--n_random_stations", "none",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
@@ -202,7 +202,7 @@ if __name__ == "__main__":
                         help="Additional input variables to train on seperated by comma ('si10,t2m,,sh2'), else pass None")
     parser.add_argument("--train_years_range", type=str, default="2018,2021",
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
-    parser.add_argument("--global_seed", type=int, default=42, help="Global seed for reproducibility")
+    parser.add_argument("--stations_seed", type=int, default=42, help="Global seed for reproducibility")
     parser.add_argument("--n_random_stations", type=int_or_none, default=None, help="Number of random stations in each sample")
     parser.add_argument("--loss", type=str, default="MaskedCharbonnierLoss", 
                         help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
@@ -254,9 +254,9 @@ if __name__ == "__main__":
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']
 
     n_random_stations = args.n_random_stations
-    global_seed = args.global_seed
+    stations_seed = args.stations_seed
     if n_random_stations is not None:
-        checkpoint_dir = f"{checkpoint_dir}/{global_seed}/{n_random_stations}-random-stations"
+        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
     else:
         checkpoint_dir = f"{checkpoint_dir}/all-stations"
 
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     f"  orography_as_channel: {orography_as_channel}\n"
     f"  additional_input_variables: {additional_input_variables}\n"
     f"  train_years_range: {train_dates_range}\n"
-    f"  global_seed: {global_seed}\n"
+    f"  stations_seed: {stations_seed}\n"
     f"  n_random_stations: {n_random_stations}\n"
     f"  loss_name: {loss_name}\n"
     f"  transform: {transform}\n"
@@ -407,7 +407,7 @@ if __name__ == "__main__":
         input_transform=input_transform,
         target_transform=target_transform,
         n_random_stations=n_random_stations,
-        global_seed=global_seed
+        stations_seed=stations_seed
     )
     if is_distributed():
         train_sampler = DistributedSampler(train_dataset)
@@ -438,7 +438,7 @@ if __name__ == "__main__":
         input_transform=input_transform,
         target_transform=target_transform,
         n_random_stations=n_random_stations,
-        global_seed=global_seed
+        stations_seed=stations_seed
     )
     if is_distributed():
         validation_sampler = DistributedSampler(validation_dataset)
@@ -575,7 +575,7 @@ if __name__ == "__main__":
                     "train_dates_range": train_dates_range,
                     "scheduler": "ExponentialLR",
                     "additional_input_variables": additional_input_variables,
-                    "global_seed": global_seed,
+                    "stations_seed": stations_seed,
                     "n_random_stations": n_random_stations,
                     "orography_as_channel": orography_as_channel,
                     "activation_layer": args.activation_layer,

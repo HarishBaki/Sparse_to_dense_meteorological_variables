@@ -67,7 +67,7 @@ class Transform:
 class RTMA_sparse_to_dense_Dataset(Dataset):
     def __init__(self, zarr_store,input_variables_in_order,orography_as_channel, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
-                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,global_seed=42):
+                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,stations_seed=42):
         '''
         Custom dataset class for loading RTMA data.
         This dataset is designed to work with the RTMA data stored in Zarr format.
@@ -87,7 +87,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         - input_transform (callable, optional): Transformation to apply to the input data.
         - target_transform (callable, optional): Transformation to apply to the target data.
         - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
-        - global_seed (int, optional): Seed for random number generation.
+        - stations_seed (int, optional): Seed for random number generation.
         Returns:
         - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
         - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
@@ -107,7 +107,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         # Check for the n_random_stations
         if n_random_stations is not None:
             # Randomly select n_random_stations from the NYSM stations
-            rng = np.random.default_rng(global_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
+            rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
             perm = rng.permutation(len(nysm_latlon))
             #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
             random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
@@ -185,7 +185,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
 class NYSM_sparse_to_dense_Dataset(Dataset):
     def __init__(self, ds,input_variables_in_order,orography_as_channel, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
-                 x_indices,station_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,global_seed=42):
+                 x_indices,station_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,stations_seed=42):
         '''
         Custom dataset class for loading NYSM data.
         This dataset is designed to work with the NYSM data stored in netcdf.
@@ -206,7 +206,7 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
         - input_transform (callable, optional): Transformation to apply to the input data.
         - target_transform (callable, optional): Transformation to apply to the target data.
         - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
-        - global_seed (int, optional): Seed for random number generation.
+        - stations_seed (int, optional): Seed for random number generation.
         Returns:
         - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
         - time_instance (str): Time instance of the data sample.
@@ -224,7 +224,7 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
         # Check for the n_random_stations
         if n_random_stations is not None:
             # Randomly select n_random_stations from the NYSM stations
-            rng = np.random.default_rng(global_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
+            rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
             perm = rng.permutation(len(nysm_latlon))
             #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
             random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
@@ -390,7 +390,7 @@ if __name__ == "__main__":
     )
 
     # Now, setting up the random seed for reproducibility
-    global_seed = 42    
+    stations_seed = 42    
     n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
     '''
     # %%
@@ -413,7 +413,7 @@ if __name__ == "__main__":
         missing_times,
         input_transform=None,
         target_transform=None,
-        global_seed=global_seed,
+        stations_seed=stations_seed,
         n_random_stations=n_random_stations
     )
     end_time = time.time()
@@ -469,7 +469,7 @@ if __name__ == "__main__":
         missing_times,
         input_transform=input_transform,
         target_transform=target_transform,
-        global_seed=global_seed,
+        stations_seed=stations_seed,
         n_random_stations=n_random_stations
     )
     end_time = time.time()
@@ -556,7 +556,7 @@ if __name__ == "__main__":
         missing_times,
         input_transform=None,
         target_transform=None,
-        global_seed=global_seed,
+        stations_seed=stations_seed,
         n_random_stations=n_random_stations
     )
     end_time = time.time()
@@ -611,7 +611,7 @@ if __name__ == "__main__":
         None,
         input_transform=input_transform,
         target_transform=target_transform,
-        global_seed=global_seed,
+        stations_seed=stations_seed,
         n_random_stations=n_random_stations
     )
     end_time = time.time()

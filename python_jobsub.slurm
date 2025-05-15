@@ -29,7 +29,7 @@ model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
 additional_input_variables=${additional_input_variables:-'none'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
-global_seed=${global_seed:-42}
+stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
@@ -46,7 +46,7 @@ echo "Variable:                $variable"
 echo "Orography as channel:    $orography_as_channel"
 echo "Additional inputs:       $additional_input_variables"
 echo "Train years:             $train_years_range"
-echo "Global seed:             $global_seed"
+echo "Global seed:             $stations_seed"
 echo "Random stations:         $n_random_stations"
 echo "Loss:                    $loss"
 echo "Transform:               $transform"
@@ -72,7 +72,7 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT train.py \
 --orography_as_channel $orography_as_channel \
 --additional_input_variables $additional_input_variables \
 --train_years_range $train_years_range \
---global_seed $global_seed \
+--stations_seed $stations_seed \
 --n_random_stations $n_random_stations \
 --loss $loss \
 --transform $transform \
