@@ -263,16 +263,37 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
         real_idx = self.valid_indices[idx]
         input = self.ds[self.input_variables_in_order].isel(time=real_idx)  # an xarray Dataset, shape: [ y, x] with number of input variables. Cannot directly extract the values. 
 
+        # Find the missing station indices across the variables
+        common_missing_mask = input[self.input_variables_in_order[0]].isel(station=self.station_indices).isnull()
+        for var in self.input_variables_in_order[1:]:
+            common_missing_mask |= input[var].isel(station=self.station_indices).isnull()
+        
+        # We will be further finding missing instances and stations.
+        # Thus, copy the self variables to local variables. 
+        station_indices = self.station_indices.copy()
+        nysm_latlon = self.nysm_latlon.copy()
+        station_mask = self.station_mask.copy()
+
+        if common_missing_mask.sum() > 0:
+            missing_station_indices = np.argwhere(common_missing_mask.values) # [N,1], indices of the missing stations.
+            print(f"Missing stations at indices: {missing_station_indices.flatten()} for time index: {real_idx}, {input.time.values}")
+            # Remove the missing stations from the station indices
+            station_indices = np.delete(station_indices, missing_station_indices)
+            # Remove the corresponding nysm_latlon
+            nysm_latlon = np.delete(nysm_latlon, missing_station_indices, axis=0)
+            # Set the corresponding station mask to zero
+            station_mask[0][self.y_indices[missing_station_indices], self.x_indices[missing_station_indices]] = 0
+        
         # Grab station values from input for all input variables
         inputs_interp = []
         for i, var in enumerate(self.input_variables_in_order):
-            station_values = input[var].values[self.station_indices]
+            station_values = input[var].values[station_indices]
             # check if any nans in the station values
             if np.isnan(station_values).any():
                 print(f"NaN values in station values for {var} at index {real_idx}")
             # Interpolate station values to full grid
             interp = griddata(
-                self.nysm_latlon,
+                nysm_latlon,
                 station_values,
                 (self.RTMA_lat, self.RTMA_lon),
                 method='nearest'
@@ -283,10 +304,10 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
 
         if self.orography_as_channel:
             # Combine inputs: interpolated + orography + station mask
-            input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+            input_tensor = np.concatenate([interp, self.orography,station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
         else:
             # combine inputs: interpolated + station mask
-            input_tensor = np.concatenate([interp, self.station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
+            input_tensor = np.concatenate([interp, station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
         
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
@@ -371,7 +392,7 @@ if __name__ == "__main__":
     # Now, setting up the random seed for reproducibility
     global_seed = 42    
     n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
-    
+    '''
     # %%
     # Examining the batches without transformations
     # compute time taken call dataset
@@ -492,7 +513,7 @@ if __name__ == "__main__":
         
         end_time = time.time()
         print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
-    
+    '''
     # %%
     # Loading the NYSM station data
     NYSM = xr.open_dataset('data/NYSM.nc')
@@ -540,10 +561,11 @@ if __name__ == "__main__":
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
+    print(f"Dataset length: {len(dataset)}")
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=12, shuffle=False,num_workers=2, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
@@ -586,7 +608,7 @@ if __name__ == "__main__":
         x_indices,
         station_indices,
         mask,
-        missing_times,
+        None,
         input_transform=input_transform,
         target_transform=target_transform,
         global_seed=global_seed,
@@ -594,10 +616,11 @@ if __name__ == "__main__":
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
+    print(f"Dataset length: {len(dataset)}")
 
     start_time = time.time()
     # Create a DataLoader
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=False,num_workers=2, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=12, shuffle=False,num_workers=2, pin_memory=True)
     end_time = time.time()
     print(f"Dataloader time: {end_time - start_time:.2f} seconds")
 
