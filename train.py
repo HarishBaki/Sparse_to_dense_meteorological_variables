@@ -159,77 +159,6 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
                     print(f"Early stopping triggered at epoch {epoch+1}.")
                 break
 
-def run_test(model, test_dataloader, test_dates_range, criterion, metric, device,
-               checkpoint_dir, variable , target_transform=None):
-    # load the best model Handle DDP 'module.' prefix
-    best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
-    model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
-
-    # === Creating a zarr for test data ===
-    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
-    zarr_store = os.path.join(checkpoint_dir, "RTMA_test.zarr")
-    init_zarr_store(zarr_store, dates, variable)
-    print(f"Zarr store initialized at {zarr_store}.")
-
-    # === Step 2: Evaluate and write predictions using matched time indices ===
-    ds = xr.open_zarr(zarr_store, consolidated=False)
-    zarr_time = ds['time'].values  # dtype=datetime64[ns]
-    time_to_idx = {t: i for i, t in enumerate(zarr_time)}
-
-    # Use low-level Zarr for writing directly
-    zarr_write = zarr.open(zarr_store, mode='a')
-    zarr_variable = zarr_write[variable]
-
-    # === testing and saving into test zarr===
-    model.eval()
-    test_loss_total = 0.0
-    test_metric_total = 0.0
-    show_progress = True
-    test_bar = tqdm(test_dataloader, desc=f"[Test]", leave=False) if show_progress else test_dataloader
-    with torch.no_grad():
-        for batch in test_bar:
-            input_tensor, target_tensor, time_value = batch
-            input_tensor = input_tensor.to(device, non_blocking=True)
-            target_tensor = target_tensor.to(device, non_blocking=True)
-            station_mask = input_tensor[:, -1, ...].unsqueeze(1)  # [B, 1, H, W]
-
-            output = model(input_tensor)    # [B, 1, H, W]
-
-            # Compute the loss
-            loss = criterion(output, target_tensor,station_mask)
-            test_loss_total += loss.item()
-
-            # === Optional: Apply inverse transform if needed ===
-            if target_transform is not None:
-                output = target_transform.inverse(output)
-                target_tensor = target_transform.inverse(target_tensor)
-
-            # Compute the metric
-            metric_value = metric(output, target_tensor, station_mask)
-            test_metric_total += metric_value.item()
-
-            if show_progress:
-                test_bar.set_postfix(loss=loss.item(), metric=metric_value.item())
-
-            # create an xarray dataset from the output
-            output_np = output.cpu().numpy()    # [B, 1, H, W]
-            time_np = np.array(time_value, dtype='datetime64[ns]')
-
-            # Match and write to correct time indices
-            for i, t in enumerate(time_np):
-                idx = time_to_idx.get(t)
-                if idx is not None:
-                    # Write to zarr
-                    zarr_variable[idx] = (output_np[i]).squeeze(0)
-                else:
-                    print(f"Warning: Time {t} not found in time axis.")
-        
-    avg_test_loss = test_loss_total / len(test_dataloader)
-    avg_test_metric = test_metric_total / len(test_dataloader)
-    print(f"Test Loss: {avg_test_loss:.4f} | Test Metric: {avg_test_metric:.4f}")
-    
-    wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
-
 # %%
 if __name__ == "__main__":      
     # This is the main entry point of the script. 
@@ -678,54 +607,6 @@ if __name__ == "__main__":
         dist.barrier()
     if not dist.is_initialized() or dist.get_rank() == 0:
         print("Training and validation completed.")
-    
-    # === Run the test and save the outputs to zarr ===
-    rank = dist.get_rank() if dist.is_initialized() else 0
-    if rank == 0:
-        test_dates_range = ['2023-01-01T00', '2023-12-31T23']
-        test_dataset = RTMA_sparse_to_dense_Dataset(
-            zarr_store,
-            input_variables_in_order,
-            orography_as_channel,
-            test_dates_range,
-            orography,
-            RTMA_lat,
-            RTMA_lon,
-            nysm_latlon,
-            y_indices,
-            x_indices,
-            mask,
-            missing_times,
-            input_transform=input_transform,
-            target_transform=target_transform
-        )
-        test_sampler = None
-        test_dataloader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False, # shuffle if not using DDP
-            sampler=test_sampler,
-            pin_memory=True,
-            num_workers=num_workers,
-            drop_last=False
-        )
-
-        print("Test data loaded successfully.")
-        print(f"Test dataset size: {len(test_dataset)}")
-
-
-        print("Starting Testing...")
-        run_test(
-            model = model, 
-            test_dataloader = test_dataloader,
-            test_dates_range = test_dates_range,
-            criterion = criterion,
-            metric = metric,
-            device = device,
-            checkpoint_dir = checkpoint_dir,
-            variable = variable, 
-            target_transform = target_transform
-        )
     
     # === Finish run and destroy process group ===
     if not dist.is_initialized() or dist.get_rank() == 0:
