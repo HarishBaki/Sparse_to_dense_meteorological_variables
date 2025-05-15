@@ -43,7 +43,7 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
 
     # === Creating a zarr for test data ===
-    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='5min')
+    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
     zarr_store = os.path.join(checkpoint_dir, "NYSM_test.zarr")
     init_zarr_store(zarr_store, dates, variable)
     print(f"Zarr store initialized at {zarr_store}.")
