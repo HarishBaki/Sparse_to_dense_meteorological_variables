@@ -276,7 +276,7 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
 
         if common_missing_mask.sum() > 0:
             missing_station_indices = np.argwhere(common_missing_mask.values) # [N,1], indices of the missing stations.
-            print(f"Missing stations at indices: {missing_station_indices.flatten()} for time index: {real_idx}, {input.time.values}")
+            #print(f"Missing stations at indices: {missing_station_indices.flatten()} for time index: {real_idx}, {input.time.values}")
             # Remove the missing stations from the station indices
             station_indices = np.delete(station_indices, missing_station_indices)
             # Remove the corresponding nysm_latlon
@@ -289,8 +289,8 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
         for i, var in enumerate(self.input_variables_in_order):
             station_values = input[var].values[station_indices]
             # check if any nans in the station values
-            if np.isnan(station_values).any():
-                print(f"NaN values in station values for {var} at index {real_idx}")
+            #if np.isnan(station_values).any():
+            #    print(f"NaN values in station values for {var} at index {real_idx}")
             # Interpolate station values to full grid
             interp = griddata(
                 nysm_latlon,
