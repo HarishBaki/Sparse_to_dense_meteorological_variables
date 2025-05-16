@@ -46,9 +46,9 @@ data_dir = '/data/harish/Sparse_to_dense_meteorological_variables'
 source_zarr_store = f'{data_dir}/RTMA.zarr'
 
 if n_stations is not None:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-random-stations.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-random-stations/RTMA_test.zarr"
 else:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/all-stations.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/all-stations/RTMA_test.zarr"
 os.makedirs(target_zarr_store, exist_ok=True)
 
 # %%
