@@ -37,14 +37,18 @@ from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_mo
 
 # %%
 def run_test(model, test_dataloader, test_dates_range, criterion, metric, device,
-               checkpoint_dir, variable , target_transform=None):
+               checkpoint_dir, variable , target_transform=None,n_inference_stations=None):
     # load the best model Handle DDP 'module.' prefix
     best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
     model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
 
     # === Creating a zarr for test data ===
     dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
-    zarr_store = os.path.join(checkpoint_dir, "NYSM_test.zarr")
+    if n_inference_stations is not None:
+        zarr_store = f'{checkpoint_dir}/{n_inference_stations}-inference-stations/NYSM_test.zarr'
+    else:
+        zarr_store = f'{checkpoint_dir}/all-inference-stations/NYSM_test.zarr'
+    os.makedirs(zarr_store, exist_ok=True)
     init_zarr_store(zarr_store, dates, variable)
     print(f"Zarr store initialized at {zarr_store}.")
 
@@ -114,7 +118,8 @@ if __name__ == "__main__":
             "--wandb_id", "none",
             # "--resume",  # Optional flag — include if you want to resume
             "--weights_seed", "42",
-            "--activation_layer", "gelu"
+            "--activation_layer", "gelu",
+            "--n_inference_stations", "none", 
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -145,7 +150,9 @@ if __name__ == "__main__":
                         help="Resume from latest checkpoint (just passing --resume is enough for resume)")
     parser.add_argument("--weights_seed", type=int, default=42, help="Seed for weight initialization")
     parser.add_argument("--activation_layer", type=str, default="gelu", 
-                        help="Activation layer to use ('gelu', 'relu', 'leakyrelu')") 
+                        help="Activation layer to use ('gelu', 'relu', 'leakyrelu')")
+    parser.add_argument("--n_inference_stations", type=int_or_none, default=None,
+                        help="Number of inference stations to use, if None, all stations will be used") 
     args, unknown = parser.parse_known_args()
 
     # %%
@@ -197,6 +204,8 @@ if __name__ == "__main__":
 
     activation_layer = args.activation_layer
     weights_seed = args.weights_seed
+
+    n_inference_stations = args.n_inference_stations
 
     checkpoint_dir = checkpoint_dir+'/'+activation_layer+'-'+str(weights_seed)
     
@@ -449,6 +458,7 @@ if __name__ == "__main__":
                     "orography_as_channel": orography_as_channel,
                     "activation_layer": args.activation_layer,
                     "weights_seed": args.weights_seed,
+                    "n_inference_stations": n_inference_stations,
                 }
             )
     
@@ -474,7 +484,7 @@ if __name__ == "__main__":
             input_transform=input_transform,
             target_transform=target_transform,
             stations_seed=stations_seed,
-            n_random_stations=n_random_stations
+            n_random_stations=n_inference_stations,     # This is a key change, since we may use different number of stations during inference.
         )
         test_sampler = None
         test_dataloader = DataLoader(
@@ -500,7 +510,8 @@ if __name__ == "__main__":
             device = device,
             checkpoint_dir = checkpoint_dir,
             variable = variable, 
-            target_transform = target_transform
+            target_transform = target_transform,
+            n_inference_stations = n_inference_stations
         )
     
     # === Finish run and destroy process group ===
