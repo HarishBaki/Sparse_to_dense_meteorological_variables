@@ -121,6 +121,13 @@ interp = xr.DataArray(
 )
 interp.plot()
 '''
+
+# %%
+# Get the best gamma and kappa_star for Barnes
+scores_df = pd.read_csv('Barnes_parameter_search.csv')
+gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
+kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
+
 # %%
 chunk_size = 24
 n_jobs = 60  # 2 threads per chunk, parallel across 60 chunks
