@@ -149,7 +149,8 @@ def interpolate_and_write_block(start_idx):
             sample = ds.isel(time=t_idx)
             station_values = sample.values[y_indices, x_indices]
             interp_flat = interpolate_to_points(
-                nysm_latlon, station_values, grid_points, interp_type='barnes'
+                nysm_latlon, station_values, grid_points, interp_type='barnes',
+                gamma=gamma, kappa_star=kappa_star
             )
             interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
             zarr_variable[t_idx, :, :] = interp
