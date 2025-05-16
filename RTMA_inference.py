@@ -216,7 +216,7 @@ if __name__ == "__main__":
     if n_random_stations is not None:
         checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
     else:
-        checkpoint_dir = f"{checkpoint_dir}/all-stations"
+        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
 
     loss_name = args.loss
     checkpoint_dir = checkpoint_dir+'/'+loss_name
