@@ -42,7 +42,7 @@ mode = sys.argv[3]
 stations_seed = 42
 dates = pd.date_range(start='2023-01-01T00', end='2023-12-31T23', freq='h')
 yyyymmdd = pd.Series(dates.year*10000 + dates.month*100 + dates.day).unique()
-data_dir = '/data/harish/Sparse_to_dense_meteorological_variables'
+data_dir = 'data' #'/data/harish/Sparse_to_dense_meteorological_variables'
 source_zarr_store = f'{data_dir}/RTMA.zarr'
 
 if n_stations is not None:
