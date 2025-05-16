@@ -34,7 +34,7 @@ def is_interactive():
     return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
 
 if is_interactive() or len(sys.argv) == 1:
-    sys.argv = ["", "i10fg", "none", "w"]
+    sys.argv = ["", "i10fg", "50", "w"]
 var_name = sys.argv[1]
 n_stations = int_or_none(sys.argv[2])
 mode = sys.argv[3]
