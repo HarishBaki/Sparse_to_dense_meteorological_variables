@@ -171,12 +171,12 @@ if __name__ == "__main__":
     # If run interactively, inject some sample arguments
     if is_interactive() or len(sys.argv) == 1:
         sys.argv = [
-            "",  # The first arg is the script name
+            "",  # Script name placeholder
             "--checkpoint_dir", "checkpoints",
             "--variable", "i10fg",
-            "--model", "DCNN",
-            "--orography_as_channel", 'false', 
-            "--additional_input_variables", 'none',
+            "--model", "UNet",
+            "--orography_as_channel", "true",
+            "--additional_input_variables", "none",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
             "--n_random_stations", "none",
@@ -185,7 +185,10 @@ if __name__ == "__main__":
             "--epochs", "2",
             "--batch_size", "16",
             "--num_workers", "32",
-            "--wandb_id", 'none',
+            "--wandb_id", "none",
+            # "--resume",  # Optional flag — include if you want to resume
+            "--weights_seed", "42",
+            "--activation_layer", "gelu"
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
