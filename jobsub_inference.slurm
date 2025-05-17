@@ -4,7 +4,7 @@
 #SBATCH --output=slurmout/ddp_test-%j.out
 #SBATCH --error=slurmout/ddp_test-%j.err
 #SBATCH --time=02-00:00:00
-#SBATCH --mem=160gb
+#SBATCH --mem=40gb
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-task=1
@@ -29,10 +29,10 @@ checkpoint_dir=${checkpoint_dir:-'checkpoints'}
 variable=${variable:-'i10fg'}    #'i10fg','si10','t2m','sh2'
 model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
-additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
+additional_input_variables=${additional_input_variables:-'none'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
-n_random_stations=${n_random_stations:-50} # 'none' or a number
+n_random_stations=${n_random_stations:-'none'} # 'none' or a number
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 epochs=${epochs:-120}
@@ -69,7 +69,7 @@ echo "----------------------------------------"
 # Install required Python packages inside the container
 pip install --quiet timm torchmetrics seaborn
 
-torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_inference.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT RTMA_inference.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
 --model $model \
