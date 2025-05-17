@@ -114,7 +114,7 @@ sample = ds.isel(time=2000)
 station_values = sample.values[y_indices, x_indices]
 interp_flat = interpolate_to_points(
     nysm_latlon, station_values, grid_points, interp_type='barnes', 
-    #gamma=0.1, minimum_neighbors=1,kappa_star=10,
+    gamma=gamma,minimum_neighbors=1,kappa_star=kappa_star,
 )
 interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
 interp = xr.DataArray(
@@ -156,7 +156,7 @@ def interpolate_and_write_block(start_idx):
             station_values = sample.values[y_indices, x_indices]
             interp_flat = interpolate_to_points(
                 nysm_latlon, station_values, grid_points, interp_type='barnes',
-                gamma=gamma, kappa_star=kappa_star
+                gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star
             )
             interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
             zarr_variable[t_idx, :, :] = interp
