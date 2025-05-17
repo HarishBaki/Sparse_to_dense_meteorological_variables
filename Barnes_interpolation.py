@@ -125,7 +125,7 @@ interp = xr.DataArray(
         'longitude': (['y', 'x'], RTMA_lon)
     }
 )
-interp.plot()
+interp.where(mask,0).plot()
 '''
 
 # %%
