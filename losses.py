@@ -18,7 +18,7 @@ class MaskedMSELoss(nn.Module):
         super().__init__()
         self.register_buffer("mask_2d", mask_2d.float())  # persists on .cuda()/.cpu(), such that the mask_2d devie is used. 
 
-    def forward(self, output, target, station_mask):
+    def forward(self, output, target, station_mask, reduction='mean'):
         """
         output: [B, 1, H, W]
         target: [B, 1, H, W]
