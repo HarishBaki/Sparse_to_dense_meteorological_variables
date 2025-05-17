@@ -71,7 +71,7 @@ orography = xr.open_dataset('orography.nc')
 RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
 RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
 orography = orography.orog.values
-
+mask = xr.open_dataset('mask_2d.nc').mask
 # Load NYSM station data
 nysm = pd.read_csv('nysm.csv')
 # NYSM station lat/lon
@@ -116,6 +116,11 @@ if n_stations is not None:
     station_indices = station_indices[random_indices]
 
 # %%
+# Get the best gamma and kappa_star for Barnes
+scores_df = pd.read_csv('Barnes_parameter_search.csv')
+gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
+kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
+# %%
 '''
 ds = NYSM[var_name].sel(time=dates)
 sample = ds.isel(time=11)
@@ -130,7 +135,7 @@ local_nysm_latlon = np.delete(local_nysm_latlon, missing_station_indices, axis=0
 station_values = sample.values[local_station_indices]
 interp_flat = interpolate_to_points(
     local_nysm_latlon, station_values, grid_points, interp_type='barnes', 
-    #gamma=0.1, minimum_neighbors=1,kappa_star=10,
+    gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star,
 )
 interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
 interp = xr.DataArray(
@@ -141,15 +146,9 @@ interp = xr.DataArray(
         'longitude': (['y', 'x'], RTMA_lon)
     }
 )
-interp.plot()
+interp.where(mask,0).plot()
 # examined the influence of having nans and eliminating nans, using local_station_values and local_nysm_latlon.
 '''
-
-# %%
-# Get the best gamma and kappa_star for Barnes
-scores_df = pd.read_csv('Barnes_parameter_search.csv')
-gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
-kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
 
 # %%
 chunk_size = 24
@@ -182,7 +181,7 @@ def interpolate_and_write_block(start_idx):
             station_values = sample.values[local_station_indices]
             interp_flat = interpolate_to_points(
                 local_nysm_latlon, station_values, grid_points, interp_type='barnes',
-                gamma=gamma, kappa_star=kappa_star
+                gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star
             )
             interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
             zarr_variable[t_idx, :, :] = interp

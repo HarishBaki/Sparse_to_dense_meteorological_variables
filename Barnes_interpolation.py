@@ -34,7 +34,7 @@ def is_interactive():
     return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
 
 if is_interactive() or len(sys.argv) == 1:
-    sys.argv = ["", "i10fg", "50", "w"]
+    sys.argv = ["", "si10", "50", "w"]
 var_name = sys.argv[1]
 n_stations = int_or_none(sys.argv[2])
 mode = sys.argv[3]
@@ -127,12 +127,6 @@ interp = xr.DataArray(
 )
 interp.where(mask,0).plot()
 '''
-
-# %%
-# Get the best gamma and kappa_star for Barnes
-scores_df = pd.read_csv('Barnes_parameter_search.csv')
-gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
-kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
 
 # %%
 chunk_size = 24

@@ -12,6 +12,7 @@ for var_name in "${var_names[@]}"; do
         for n_staitons in "${stations[@]}"; do
             echo "Processing variable: $var_name, n_stations $n_staitons, with mode: $mode"
             # Example: run test script
+            python Barnes_interpolation.py $var_name $n_staitons $mode
             python Barnes_interpolation_NYSM.py $var_name $n_staitons $mode  
         done
     else
@@ -19,6 +20,7 @@ for var_name in "${var_names[@]}"; do
         n_staitons='none'
         echo "Processing variable: $var_name, n_stations $n_staitons, with mode: $mode"
         # Example: run test script
+        python Barnes_interpolation.py $var_name $n_staitons $mode
         python Barnes_interpolation_NYSM.py $var_name $n_staitons $mode
     fi
     echo "Variable $var_name processed."
