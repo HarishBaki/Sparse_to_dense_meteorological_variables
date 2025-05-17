@@ -36,8 +36,18 @@ class MaskedMSELoss(nn.Module):
         se = (output - target) ** 2
         masked_se = se * valid_mask
 
-        loss = masked_se.sum() / valid_mask.sum().clamp(min=1.0)
-        return loss
+        mse_sum_per_sample = masked_se.view(B, -1).sum(dim=1)
+        valid_counts = valid_mask.view(B, -1).sum(dim=1).clamp(min=1.0)
+        mse_per_sample = mse_sum_per_sample / valid_counts  # shape: [B]
+
+        if reduction == 'none':
+            return mse_per_sample  # [B]
+        elif reduction == 'mean':
+            return mse_per_sample.mean()  # scalar
+        elif reduction == 'global':
+            total_se = mse_sum_per_sample.sum()
+            total_valid = valid_counts.sum().clamp(min=1.0)
+            return total_se / total_valid  # scalar
 
 class MaskedRMSELoss(nn.Module):
     """
