@@ -71,7 +71,7 @@ orography = xr.open_dataset('orography.nc')
 RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
 RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
 orography = orography.orog.values
-
+mask = xr.open_dataset('mask_2d.nc').mask
 # Load NYSM station data
 nysm = pd.read_csv('nysm.csv')
 # NYSM station lat/lon
