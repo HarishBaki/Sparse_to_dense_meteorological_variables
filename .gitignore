@@ -175,7 +175,7 @@ cython_debug/
 Sparse_to_dense_meteorological_variables
 
 RTMA/
-data/   
+data 
 110m_cultural/
 .devcontainer
 slurmout/
