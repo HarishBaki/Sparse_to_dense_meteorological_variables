@@ -106,15 +106,16 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.mask = mask
         self.stations_seed = stations_seed
         self.randomize_stations_persample = randomize_stations_persample
+        self.n_random_stations = n_random_stations
 
-        if not self.randomize_stations_persample:
+        if not self.randomize_stations_persample:   # if False
             # Check for the n_random_stations
-            if n_random_stations is not None:
+            if self.n_random_stations is not None:   # if an integer
                 # Randomly select n_random_stations from the NYSM stations
                 rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
                 perm = rng.permutation(len(nysm_latlon))
                 #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
-                random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
+                random_indices = perm[:self.n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
                 # Update the y_indices and x_indices to the random stations
                 y_indices = y_indices[random_indices]
                 x_indices = x_indices[random_indices]
