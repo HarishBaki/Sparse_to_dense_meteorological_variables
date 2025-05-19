@@ -147,6 +147,27 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         target = self.ds[self.input_variables_in_order[0]].isel(time=real_idx)    # an xarray DataArray, shape: [ y, x]. Can access the values directly.
         input = self.ds[self.input_variables_in_order].isel(time=real_idx)  # an xarray Dataset, shape: [ y, x] with number of input variables. Cannot directly extract the values. 
 
+        y_indices = self.y_indices.copy()
+        x_indices = self.x_indices.copy()
+        nysm_latlon = self.nysm_latlon.copy()
+        station_mask = self.station_mask.copy()
+        if self.randomize_stations_persample:
+            # Randomly select n_random_stations from the NYSM stations.
+            # The key is, the n_random_stations is a random number for each sample. 
+            # Using that random number, we will select the random stations from the NYSM stations.
+            rng = np.random.default_rng(self.stations_seed + real_idx)
+            perm = rng.permutation(len(self.nysm_latlon))
+            n_random_stations = rng.integers(50, len(self.nysm_latlon) + 1)
+            random_indices = perm[:n_random_stations]        
+            # Update the y_indices and x_indices to the random stations
+            y_indices = self.y_indices[random_indices]
+            x_indices = self.x_indices[random_indices]
+            nysm_latlon = self.nysm_latlon[random_indices]
+            # Update the station mask
+            station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
+            station_mask[y_indices, x_indices] = 1  # Set 1 at the station locations
+            station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
+        print(f"Y indices: {y_indices[:5]} for time index: {real_idx}, {input.time.values}")
         # Grab station values from input for all input variables
         inputs_interp = []
         for i, var in enumerate(self.input_variables_in_order):
