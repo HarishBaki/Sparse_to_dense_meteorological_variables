@@ -67,7 +67,7 @@ class Transform:
 class RTMA_sparse_to_dense_Dataset(Dataset):
     def __init__(self, zarr_store,input_variables_in_order,orography_as_channel, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
-                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,stations_seed=42):
+                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,stations_seed=42,randomize_stations_persample=False):
         '''
         Custom dataset class for loading RTMA data.
         This dataset is designed to work with the RTMA data stored in Zarr format.
@@ -88,6 +88,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         - target_transform (callable, optional): Transformation to apply to the target data.
         - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
         - stations_seed (int, optional): Seed for random number generation.
+        - randomize_stations_persample (bool): If True, then the n_random_stations is a random number for each sample.
         Returns:
         - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
         - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
@@ -103,6 +104,8 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.RTMA_lon = RTMA_lon
         self.orography = np.expand_dims(orography, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
         self.mask = mask
+        self.stations_seed = stations_seed
+        self.randomize_stations_persample = randomize_stations_persample
 
         # Check for the n_random_stations
         if n_random_stations is not None:
