@@ -107,17 +107,18 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.stations_seed = stations_seed
         self.randomize_stations_persample = randomize_stations_persample
 
-        # Check for the n_random_stations
-        if n_random_stations is not None:
-            # Randomly select n_random_stations from the NYSM stations
-            rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
-            perm = rng.permutation(len(nysm_latlon))
-            #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
-            random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
-            # Update the y_indices and x_indices to the random stations
-            y_indices = y_indices[random_indices]
-            x_indices = x_indices[random_indices]
-            nysm_latlon = nysm_latlon[random_indices]
+        if not self.randomize_stations_persample:
+            # Check for the n_random_stations
+            if n_random_stations is not None:
+                # Randomly select n_random_stations from the NYSM stations
+                rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
+                perm = rng.permutation(len(nysm_latlon))
+                #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
+                random_indices = perm[:n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
+                # Update the y_indices and x_indices to the random stations
+                y_indices = y_indices[random_indices]
+                x_indices = x_indices[random_indices]
+                nysm_latlon = nysm_latlon[random_indices]
         self.nysm_latlon = nysm_latlon
         self.y_indices = y_indices
         self.x_indices = x_indices
