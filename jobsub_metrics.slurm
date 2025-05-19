@@ -22,10 +22,10 @@ conda activate gUstNET   # Replace with your actual env name
 
 # Call the actual training script
 checkpoint_dir=${checkpoint_dir:-'checkpoints'}
-variable=${variable:-'i10fg'}    #'i10fg','si10','t2m','sh2'
+variable=${variable:-'sh2'}    #'i10fg','si10','t2m','sh2'
 model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
-additional_input_variables=${additional_input_variables:-'si10'} # 'si10,t2m,sh2' or 'none'
+additional_input_variables=${additional_input_variables:-'i10fg,si10,t2m'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
