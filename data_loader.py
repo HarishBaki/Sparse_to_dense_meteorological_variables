@@ -417,7 +417,8 @@ if __name__ == "__main__":
     # Now, setting up the random seed for reproducibility
     stations_seed = 42    
     n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
-    '''
+    randomize_stations_persample = True # If True, then the n_random_stations is a random number for each sample. 
+    
     # %%
     # Examining the batches without transformations
     # compute time taken call dataset
@@ -439,7 +440,8 @@ if __name__ == "__main__":
         input_transform=None,
         target_transform=None,
         stations_seed=stations_seed,
-        n_random_stations=n_random_stations
+        n_random_stations=n_random_stations,
+        randomize_stations_persample=randomize_stations_persample
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
@@ -476,6 +478,10 @@ if __name__ == "__main__":
         print(f" DataLoader iteration time: {end_time - start_time:.2f} seconds")
     # %%
     # Examining the batches with transformations
+    # Now, setting up the random seed for reproducibility
+    stations_seed = 42    
+    n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
+    randomize_stations_persample = True # If True, then the n_random_stations is a random number for each sample. 
     # compute time taken call dataset
     start_time = time.time()
     # Create dataset instance
@@ -495,7 +501,8 @@ if __name__ == "__main__":
         input_transform=input_transform,
         target_transform=target_transform,
         stations_seed=stations_seed,
-        n_random_stations=n_random_stations
+        n_random_stations=n_random_stations, 
+        randomize_stations_persample=randomize_stations_persample
     )
     end_time = time.time()
     print(f"Dataset creation time: {end_time - start_time:.2f} seconds")
