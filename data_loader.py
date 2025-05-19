@@ -171,10 +171,10 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         # Grab station values from input for all input variables
         inputs_interp = []
         for i, var in enumerate(self.input_variables_in_order):
-            station_values = input[var].values[self.y_indices, self.x_indices]
+            station_values = input[var].values[y_indices, x_indices]
             # Interpolate station values to full grid
             interp = griddata(
-                self.nysm_latlon,
+                nysm_latlon,
                 station_values,
                 (self.RTMA_lat, self.RTMA_lon),
                 method='nearest'
@@ -185,10 +185,10 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         
         if self.orography_as_channel:
             # Combine inputs: interpolated + orography + station mask
-            input_tensor = np.concatenate([interp, self.orography,self.station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
+            input_tensor = np.concatenate([interp, self.orography,station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
         else:
             # combine inputs: interpolated + station mask
-            input_tensor = np.concatenate([interp, self.station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
+            input_tensor = np.concatenate([interp, station_mask], axis=0)  # shape: [num_input_variables+1, y, x]
         
         # Apply mask
         input_tensor = np.where(self.mask, input_tensor, 0)
