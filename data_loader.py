@@ -152,13 +152,15 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         x_indices = self.x_indices.copy()
         nysm_latlon = self.nysm_latlon.copy()
         station_mask = self.station_mask.copy()
+        n_random_stations = self.n_random_stations
         if self.randomize_stations_persample:
             # Randomly select n_random_stations from the NYSM stations.
             # The key is, the n_random_stations is a random number for each sample. 
             # Using that random number, we will select the random stations from the NYSM stations.
             rng = np.random.default_rng(self.stations_seed + real_idx)
             perm = rng.permutation(len(self.nysm_latlon))
-            n_random_stations = rng.integers(50, len(self.nysm_latlon) + 1)
+            if self.n_random_stations is None:  # if the n_random_stations is None, then a random number is selected. Else, it is a fixed number for each idx.
+                n_random_stations = rng.integers(50, len(self.nysm_latlon) + 1)
             random_indices = perm[:n_random_stations]        
             # Update the y_indices and x_indices to the random stations
             y_indices = self.y_indices[random_indices]
