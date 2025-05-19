@@ -180,6 +180,7 @@ if __name__ == "__main__":
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
             "--n_random_stations", "none",
+            "--randomize_stations_persample", "true",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--epochs", "2",
@@ -207,6 +208,8 @@ if __name__ == "__main__":
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
     parser.add_argument("--stations_seed", type=int, default=42, help="Global seed for reproducibility")
     parser.add_argument("--n_random_stations", type=int_or_none, default=None, help="Number of random stations in each sample")
+    parser.add_argument("--randomize_stations_persample", type=bool_from_str, default=False, 
+                        help="Randomize stations for each sample: True or False")
     parser.add_argument("--loss", type=str, default="MaskedCharbonnierLoss", 
                         help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
     parser.add_argument("--transform", type=str, default="standard", 
@@ -257,11 +260,18 @@ if __name__ == "__main__":
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']
 
     n_random_stations = args.n_random_stations
+    randomize_stations_persample = args.randomize_stations_persample
     stations_seed = args.stations_seed
-    if n_random_stations is not None:
-        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
+    if not randomize_stations_persample:
+        if n_random_stations is not None:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
+        else:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
     else:
-        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
+        if n_random_stations is not None:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations-per-sample"
+        else:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/unknown-random-stations-per-sample"
 
     loss_name = args.loss
     checkpoint_dir = checkpoint_dir+'/'+loss_name
@@ -313,6 +323,7 @@ if __name__ == "__main__":
     f"  train_years_range: {train_dates_range}\n"
     f"  stations_seed: {stations_seed}\n"
     f"  n_random_stations: {n_random_stations}\n"
+    f" randomize_stations_persample: {randomize_stations_persample}\n"
     f"  loss_name: {loss_name}\n"
     f"  transform: {transform}\n"
     f"  num_epochs: {num_epochs}\n"
@@ -410,7 +421,8 @@ if __name__ == "__main__":
         input_transform=input_transform,
         target_transform=target_transform,
         n_random_stations=n_random_stations,
-        stations_seed=stations_seed
+        stations_seed=stations_seed,
+        randomize_stations_persample=randomize_stations_persample
     )
     if is_distributed():
         train_sampler = DistributedSampler(train_dataset)
@@ -441,7 +453,8 @@ if __name__ == "__main__":
         input_transform=input_transform,
         target_transform=target_transform,
         n_random_stations=n_random_stations,
-        stations_seed=stations_seed
+        stations_seed=stations_seed, 
+        randomize_stations_persample=randomize_stations_persample,
     )
     if is_distributed():
         validation_sampler = DistributedSampler(validation_dataset)
@@ -580,6 +593,7 @@ if __name__ == "__main__":
                     "additional_input_variables": additional_input_variables,
                     "stations_seed": stations_seed,
                     "n_random_stations": n_random_stations,
+                    "randomize_stations_persample": randomize_stations_persample,
                     "orography_as_channel": orography_as_channel,
                     "activation_layer": args.activation_layer,
                     "weights_seed": args.weights_seed,
