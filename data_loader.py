@@ -170,7 +170,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             station_mask = np.zeros_like(self.RTMA_lat, dtype=np.uint8)
             station_mask[y_indices, x_indices] = 1  # Set 1 at the station locations
             station_mask = np.expand_dims(station_mask, axis=0)  # shape: [1, y, x], should be compatable with the input tensor
-        print(f"Y indices: {y_indices[:5]} for time index: {real_idx}, {input.time.values}")
+        #print(f"Y indices: {y_indices[:5]} of length {len(y_indices)} for time index: {real_idx}, {input.time.values}")
         # Grab station values from input for all input variables
         inputs_interp = []
         for i, var in enumerate(self.input_variables_in_order):
