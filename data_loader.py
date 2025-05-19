@@ -419,7 +419,7 @@ if __name__ == "__main__":
 
     # Now, setting up the random seed for reproducibility
     stations_seed = 42    
-    n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
+    n_random_stations = 50    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
     randomize_stations_persample = True # If True, then the n_random_stations is a random number for each sample. 
     
     # %%
@@ -483,7 +483,7 @@ if __name__ == "__main__":
     # Examining the batches with transformations
     # Now, setting up the random seed for reproducibility
     stations_seed = 42    
-    n_random_stations = None    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
+    n_random_stations = 50    # If None, all the stations are taken without any randomness. Else, randomly n_random_stations are selected. 
     randomize_stations_persample = True # If True, then the n_random_stations is a random number for each sample. 
     # compute time taken call dataset
     start_time = time.time()
