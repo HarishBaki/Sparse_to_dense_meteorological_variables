@@ -29,10 +29,11 @@ checkpoint_dir=${checkpoint_dir:-'checkpoints'}
 variable=${variable:-'i10fg'}    #'i10fg','si10','t2m','sh2'
 model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
-additional_input_variables=${additional_input_variables:-'none'} # 'si10,t2m,sh2' or 'none'
+additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
+randomize_stations_persample=${randomize_stations_persample:-'true'} # 'true' or 'false'
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 epochs=${epochs:-120}
@@ -51,6 +52,7 @@ echo "Additional inputs:       $additional_input_variables"
 echo "Train years:             $train_years_range"
 echo "Global seed:             $stations_seed"
 echo "Random stations:         $n_random_stations"
+echo "Randomize stations:      $randomize_stations_persample"
 echo "Loss:                    $loss"
 echo "Transform:               $transform"
 echo "Epochs:                  $epochs"
@@ -69,7 +71,7 @@ echo "----------------------------------------"
 # Install required Python packages inside the container
 pip install --quiet timm torchmetrics seaborn
 
-torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT RTMA_inference.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_inference.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
 --model $model \
@@ -78,6 +80,7 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT RTMA_infere
 --train_years_range $train_years_range \
 --stations_seed $stations_seed \
 --n_random_stations $n_random_stations \
+--randomize_stations_persample $randomize_stations_persample \
 --loss $loss \
 --transform $transform \
 --epochs $epochs \

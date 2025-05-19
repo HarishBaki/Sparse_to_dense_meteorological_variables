@@ -47,12 +47,13 @@ if __name__ == "__main__":
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
             "--n_random_stations", "50",
+            "--randomize_stations_persample", "true",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--weights_seed", "42",
             "--activation_layer", "gelu",
-            "--n_inference_stations", "100", 
-            "--data_type","RTMA",
+            "--n_inference_stations", "75", 
+            "--data_type","NYSM",
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -71,6 +72,8 @@ if __name__ == "__main__":
                     help="Comma-separated training years range, e.g., '2018,2019' for 2018 to 2019")
     parser.add_argument("--stations_seed", type=int, default=42, help="Global seed for reproducibility")
     parser.add_argument("--n_random_stations", type=int_or_none, default=None, help="Number of random stations in each sample")
+    parser.add_argument("--randomize_stations_persample", type=bool_from_str, default=False, 
+                    help="Randomize stations for each sample: True or False")
     parser.add_argument("--loss", type=str, default="MaskedCharbonnierLoss", 
                         help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
     parser.add_argument("--transform", type=str, default="standard", 
@@ -94,6 +97,7 @@ if __name__ == "__main__":
     years = args.train_years_range.split(",")
     n_random_stations = args.n_random_stations
     stations_seed = args.stations_seed
+    randomize_stations_persample = args.randomize_stations_persample
     loss_name = args.loss
     transform = args.transform
     activation_layer = args.activation_layer
@@ -129,10 +133,16 @@ if __name__ == "__main__":
     # Compose the date strings for slicing
     train_dates_range = [f"{start_year}-01-01T00", f"{end_year}-12-31T23"] # ['2018-01-01T00', '2021-12-31T23']
 
-    if n_random_stations is not None:
-        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
+    if not randomize_stations_persample:
+        if n_random_stations is not None:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
+        else:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
     else:
-        checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
+        if n_random_stations is not None:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations-per-sample"
+        else:
+            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/unknown-random-stations-per-sample"
 
     checkpoint_dir = checkpoint_dir+'/'+loss_name
 

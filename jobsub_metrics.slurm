@@ -22,18 +22,19 @@ conda activate gUstNET   # Replace with your actual env name
 
 # Call the actual training script
 checkpoint_dir=${checkpoint_dir:-'checkpoints'}
-variable=${variable:-'sh2'}    #'i10fg','si10','t2m','sh2'
+variable=${variable:-'i10fg'}    #'i10fg','si10','t2m','sh2'
 model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
-additional_input_variables=${additional_input_variables:-'i10fg,si10,t2m'} # 'si10,t2m,sh2' or 'none'
+additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
+randomize_stations_persample=${randomize_stations_persample:-'true'} # 'true' or 'false'
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
-n_inference_stations=${n_inference_stations:-'none'} # 'none' or a number
+n_inference_stations=${n_inference_stations:-'50'} # 'none' or a number
 data_type=${data_type:-'RTMA'}
 
 echo "----------------------------------------"
@@ -46,6 +47,7 @@ echo "Additional inputs:       $additional_input_variables"
 echo "Train years:             $train_years_range"
 echo "Global seed:             $stations_seed"
 echo "Random stations:         $n_random_stations"
+echo "Randomize stations:      $randomize_stations_persample"
 echo "Loss:                    $loss"
 echo "Transform:               $transform"
 echo "Weights seed:            $weights_seed"
@@ -66,6 +68,7 @@ python compute_metrics.py \
 --train_years_range $train_years_range \
 --stations_seed $stations_seed \
 --n_random_stations $n_random_stations \
+--randomize_stations_persample $randomize_stations_persample \
 --loss $loss \
 --transform $transform \
 --weights_seed $weights_seed \
