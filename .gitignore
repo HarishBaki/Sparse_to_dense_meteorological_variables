@@ -179,7 +179,8 @@ data
 110m_cultural/
 .devcontainer
 slurmout/
-checkpoints/
+checkpoints
 checkpoints_/
 wandb/
 physicsnemo:25.03.tar
+Sparse_to_Dense_best_model.pt
