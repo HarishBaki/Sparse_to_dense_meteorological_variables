@@ -99,7 +99,8 @@ def run_test(model, test_dataloader, device,
             # === Optional: Apply inverse transform if needed ===
             if target_transform is not None:
                 output = target_transform.inverse(output)
-
+            # Clamping the output to be non-negative
+            output = torch.clamp(output, min=0.0)
             # create an xarray dataset from the output
             output_np = output.cpu().numpy()    # [B, 1, H, W]
             time_np = np.array(time_value, dtype='datetime64[ns]')
