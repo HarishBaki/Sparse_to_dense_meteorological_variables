@@ -40,7 +40,7 @@ from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_mo
 # === Creating an initial zarr with the full dataset ===
 # This call will be run for once, just to create the zarr store.
 # The NYSM data also have exactly 631008 time instances, which is at 5min interval. 
-dates = pd.date_range(start='2018-01-01T00:00', end='2023-12-31T23:59', freq='5min')
+dates = pd.date_range(start='2018-01-01T00:00', end='2025-12-31T23:59', freq='5min')
 zarr_store = '/data/harish/Gust_field_nowcasting_from_Sparse_stations/NYSM.zarr'    #This is not the path of Sparse_to_Dense, but the path of the Gust Nowcasting zarr store
 os.makedirs(zarr_store, exist_ok=True)
 # === Computing the outputs on test data and saving them to zarr ===
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     if is_interactive() or len(sys.argv) == 1:
         sys.argv = [
             "",  # Script name placeholder
-            "--year", "2021",
+            "--year", "2023",
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -378,6 +378,7 @@ if __name__ == "__main__":
     # === Run the test and save the outputs to zarr ===
     rank = dist.get_rank() if dist.is_initialized() else 0
     if rank == 0:
+        # %%
         print("Running the test and saving the outputs to zarr.")
         test_dataset = NYSM_sparse_to_dense_Dataset(
             NYSM,
@@ -412,6 +413,7 @@ if __name__ == "__main__":
         print("Test data loaded successfully.")
         print(f"Test dataset size: {len(test_dataset)}")
 
+        # %%
         print("Starting Testing...")
         start_time = time.time()
         run_test(
