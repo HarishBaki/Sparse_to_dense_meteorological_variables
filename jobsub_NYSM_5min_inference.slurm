@@ -8,9 +8,9 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-task=1
-#SBATCH --cpus-per-task=24
+#SBATCH --cpus-per-task=36
 #SBATCH --container-image=/home/harish/softwares/container_images/physicsnemo:25.03.sqsh
-#SBATCH --container-mounts=/home/harish:/home/harish,/home/harish/Ongoing_Research/Gust_field_nowcasting_from_Sparse_stations:/workspace,/data/harish/Gust_field_nowcasting_from_Sparse_stations:/workspace/data
+#SBATCH --container-mounts=/home/harish:/home/harish,/home/harish/Ongoing_Research/Sparse_to_dense_meteorological_variables:/workspace,/data/harish/Sparse_to_dense_meteorological_variables:/workspace/data,/data/harish/Gust_field_nowcasting_from_Sparse_stations:/data/harish/Gust_field_nowcasting_from_Sparse_stations
 #SBATCH --container-workdir=/workspace
 
 # Install required Python packages inside the container
