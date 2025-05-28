@@ -29,13 +29,13 @@ additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
 n_random_stations=${n_random_stations:-'none'} # 'none' or a number
-randomize_stations_persample=${randomize_stations_persample:-'true'} # 'true' or 'false'
+randomize_stations_persample=${randomize_stations_persample:-'false'} # 'true' or 'false'
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
-n_inference_stations=${n_inference_stations:-'50'} # 'none' or a number
-data_type=${data_type:-'RTMA'}
+n_inference_stations=${n_inference_stations:-'none'} # 'none' or a number
+data_type=${data_type:-'NYSM'}
 
 echo "----------------------------------------"
 echo "Launching training with the following settings:"
