@@ -234,7 +234,7 @@ if __name__ == "__main__":
         y_indices = y_indices[random_indices]
         x_indices = x_indices[random_indices]
 
-    T = len(NYSM.time)  # or len(xr.open_zarr(ref_zarr_store)[var].sel(time=slice(*test_dates_range)).time)
+    T = len(target_ds.time)
     H, W = RTMA_lat.shape
 
     if data_type == 'RTMA':
