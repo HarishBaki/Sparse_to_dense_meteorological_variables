@@ -1,5 +1,5 @@
+# %%
 import torch 
-
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -27,9 +27,9 @@ from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_mo
 
 
 # %%
-if __name__ == "__main__":      
+if __name__ == "__main__":   
+    # %%   
     # This is the main entry point of the script. 
-
     # === Args for interactive debugging ===
     def is_interactive():
         import __main__ as main
@@ -46,13 +46,13 @@ if __name__ == "__main__":
             "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
-            "--n_random_stations", "50",
-            "--randomize_stations_persample", "true",
+            "--n_random_stations", "none",
+            "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--weights_seed", "42",
             "--activation_layer", "gelu",
-            "--n_inference_stations", "75", 
+            "--n_inference_stations", "none", 
             "--data_type","NYSM",
         ]
         print("DEBUG: Using injected args:", sys.argv)
@@ -227,6 +227,11 @@ if __name__ == "__main__":
     # ========= Actual metric computation starts here ===
     ds_all_vars = {}
 
+    # Load predictions and targets
+    target_ds = xr.open_zarr(ref_zarr_store)[variable].sel(time=slice(*test_dates_range))
+    test_ds = xr.open_zarr(test_zarr_store)[variable].sel(time=slice(*test_dates_range))
+    NYSM_var_data = NYSM[variable].sel(time=slice(*test_dates_range))
+
     if n_inference_stations is not None:
         rng = np.random.default_rng(stations_seed)
         perm = rng.permutation(len(nysm_latlon))
@@ -261,11 +266,7 @@ if __name__ == "__main__":
             y, x = y_indices[s], x_indices[s]
             present_mask = ~missing_mask[:, s]
             station_mask[present_mask, 0, y, x] = 1
-    
-    # Load predictions and targets
-    target_ds = xr.open_zarr(ref_zarr_store)[variable].sel(time=slice(*test_dates_range))
-    test_ds = xr.open_zarr(test_zarr_store)[variable].sel(time=slice(*test_dates_range))
-
+    # %%
     target_tensor = torch.tensor(target_ds.values, dtype=torch.float32).unsqueeze(1)
     test_tensor = torch.tensor(test_ds.values, dtype=torch.float32).unsqueeze(1)
     nan_mask = torch.isnan(target_tensor) | torch.isnan(test_tensor)
