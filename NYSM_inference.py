@@ -36,20 +36,21 @@ from sampler import DistributedEvalSampler
 from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_model_checkpoint, restore_model_checkpoint, init_zarr_store
 
 # %%
-def run_test(model, test_dataloader, test_dates_range, criterion, metric, device,
+def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, metric, device,
                checkpoint_dir, variable , target_transform=None,n_inference_stations=None):
     # load the best model Handle DDP 'module.' prefix
     best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
     model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
 
     # === Creating a zarr for test data ===
-    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
+    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq=f'{freq}min')
+    chunk_size = 24 * 60 // freq  # 24 hours in minutes divided by frequency
     if n_inference_stations is not None:
         zarr_store = f'{checkpoint_dir}/{n_inference_stations}-inference-stations/NYSM_test.zarr'
     else:
         zarr_store = f'{checkpoint_dir}/all-inference-stations/NYSM_test.zarr'
     os.makedirs(zarr_store, exist_ok=True)
-    init_zarr_store(zarr_store, dates, variable)
+    init_zarr_store(zarr_store, dates, variable, chunk_size=chunk_size)
     print(f"Zarr store initialized at {zarr_store}.")
 
     # === Step 2: Evaluate and write predictions using matched time indices ===
@@ -75,24 +76,32 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
             # === Optional: Apply inverse transform if needed ===
             if target_transform is not None:
                 output = target_transform.inverse(output)
-
+            # Apply masking, since we don't need the values outside NYS
+            output = torch.where(torch.tensor(mask.values).to(device=device),output,0)
+            # Clamping the output to be non-negative
+            output = torch.clamp(output, min=0.0)
             # create an xarray dataset from the output
             output_np = output.cpu().numpy()    # [B, 1, H, W]
             time_np = np.array(time_value, dtype='datetime64[ns]')
 
+            # Collect all indices and outputs, then write in batch after loop
+            idx_list, data_list = [], []
             # Match and write to correct time indices
             for i, t in enumerate(time_np):
                 idx = time_to_idx.get(t)
                 if idx is not None:
-                    # Write to zarr
-                    zarr_variable[idx] = (output_np[i]).squeeze(0)
+                    idx_list.append(idx)
+                    data_list.append(output_np[i].squeeze(0))
                 else:
                     print(f"Warning: Time {t} not found in time axis.")
+            # Now write once
+            if idx_list:
+                zarr_variable.oindex[idx_list] = np.stack(data_list)
 
 # %%
-if __name__ == "__main__":      
+if __name__ == "__main__":  
+    # %%    
     # This is the main entry point of the script. 
-
     # === Args for interactive debugging ===
     def is_interactive():
         import __main__ as main
@@ -106,11 +115,11 @@ if __name__ == "__main__":
             "--variable", "i10fg",
             "--model", "UNet",
             "--orography_as_channel", "true",
-            "--additional_input_variables", "none",
+            "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
             "--n_random_stations", "none",
-            "--randomize_stations_persample", "true",
+            "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--epochs", "2",
@@ -274,10 +283,10 @@ if __name__ == "__main__":
     
     # %%
     # === Loading some topography and masking data ===
-    orography = xr.open_dataset('orography.nc').orog
+    orography = xr.open_dataset('orography.nc')
     RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
     RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
-    orography = orography.values
+    orography = orography.orog.values
 
     mask = xr.open_dataset('mask_2d.nc').mask
     mask_tensor = torch.tensor(mask.values.astype(np.float32), device=device)  # [H, W], defnitely send it to device
@@ -309,7 +318,8 @@ if __name__ == "__main__":
     # Query the station locations
     _, station_indices = tree.query(nysm_latlon)
     NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-    NYSM = NYSM.resample(time='1h').nearest()
+    freq = 5    # 5 minutes
+    NYSM = NYSM.resample(time=f'{freq}min').nearest()   # Change nearest to max, for the max value in the 5 minutes window
 
     missing_times = (NYSM[variable].isnull()).any(dim='station')
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
@@ -473,10 +483,11 @@ if __name__ == "__main__":
                     "randomize_stations_persample": randomize_stations_persample,
                 }
             )
-    
+    # %%
     # === Run the test and save the outputs to zarr ===
     rank = dist.get_rank() if dist.is_initialized() else 0
     if rank == 0:
+        # %%
         print("Running the test and saving the outputs to zarr.")
         test_dates_range = ['2023-01-01T00:00', '2023-12-31T23:59']
         test_dataset = NYSM_sparse_to_dense_Dataset(
@@ -508,15 +519,18 @@ if __name__ == "__main__":
             num_workers=num_workers,
             drop_last=False
         )
-
+    
         print("Test data loaded successfully.")
         print(f"Test dataset size: {len(test_dataset)}")
 
+        # %%
         print("Starting Testing...")
         run_test(
             model = model, 
             test_dataloader = test_dataloader,
             test_dates_range = test_dates_range,
+            freq = freq,
+            mask = mask,
             criterion = criterion,
             metric = metric,
             device = device,
