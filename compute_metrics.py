@@ -242,7 +242,20 @@ if __name__ == "__main__":
         station_mask[:, 0, y_indices, x_indices] = 1
 
     elif data_type == 'NYSM':
-        missing_mask = NYSM[variable].T.isnull().values  # shape [T, N_stations]
+        if variable == 'i10fg':
+            # Convert to pandas datetime index and infer frequency
+            test_ds_freq = pd.infer_freq(pd.DatetimeIndex(test_ds.time.values))
+            if test_ds_freq == '5min':
+                test_ds = test_ds.rolling(time=12, min_periods = 1, center=True).max()
+                test_ds = test_ds.sel(time=test_ds.time.dt.minute==0)
+            else:
+                test_ds = test_ds.resample(time='1h').nearest()
+            NYSM_var_data = NYSM_var_data.rolling(time=12, min_periods = 1, center=True).max()
+            NYSM_var_data = NYSM_var_data.sel(time=NYSM_var_data.time.dt.minute==0)
+        else:
+            test_ds = test_ds.resample(time='1h').nearest()
+            NYSM_var_data = NYSM[variable].resample(time='1h').nearest()
+        missing_mask = NYSM_var_data.T.isnull().values  # shape [T, N_stations]
         station_mask = np.zeros((T, 1, H, W), dtype=np.uint8)
         for s in range(len(y_indices)):
             y, x = y_indices[s], x_indices[s]
