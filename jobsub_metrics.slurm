@@ -7,7 +7,7 @@
 #SBATCH --mem=160gb
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=36
 # #SBATCH --exclude=dgx02 #only needed for dgx
 # #SBATCH --container-image=/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh
 # #SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
