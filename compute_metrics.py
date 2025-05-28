@@ -221,7 +221,7 @@ if __name__ == "__main__":
     station_points = np.stack([NYSM_lat.ravel(), NYSM_lon.ravel()], axis=-1)
     tree = cKDTree(station_points)
     _, station_indices = tree.query(nysm_latlon)
-    NYSM = NYSM.isel(station=station_indices).sel(time=slice(*test_dates_range)).resample(time='1h').nearest()
+    NYSM = NYSM.isel(station=station_indices).sel(time=slice(*test_dates_range)) #.resample(time='1h').max()
         
     # %%
     # ========= Actual metric computation starts here ===
