@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 import xarray as xr
 import zarr
+import dask.array as da
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
@@ -94,15 +95,25 @@ def restore_model_checkpoint(model, optimizer, scheduler, path, device="cuda"):
 
 # %%
 # === Computing the outputs on test data and saving them to zarr ===
-def init_zarr_store(zarr_store, dates,variable):
+def init_zarr_store(zarr_store, dates, variable, chunk_size=24):
     orography = xr.open_dataset('orography.nc')
     orography.attrs = {}
-    template = xr.full_like(orography.orog.expand_dims(time=dates),fill_value=np.nan,dtype='float32')
-    template['time'] = dates
-    template = template.chunk({'time': 24})
-    template = template.transpose('time','y','x')
-    template = template.assign_coords({
-        'latitude': orography.latitude,
-        'longitude': orography.longitude
-    })
-    template.to_dataset(name = variable).to_zarr(zarr_store, compute=False, mode='w')
+    shape = (len(dates),) + orography.orog.shape  # (time, y, x)
+
+    # Create a lazy Dask array filled with NaNs
+    data = da.full(shape, np.nan, chunks=(chunk_size, -1, -1), dtype='float32')
+
+    template = xr.DataArray(
+        data,
+        dims=('time', 'y', 'x'),
+        coords={
+            'time': dates,
+            'latitude': orography.latitude,
+            'longitude': orography.longitude
+        },
+        name=variable,
+        attrs={}
+    )
+
+    ds = template.to_dataset()
+    ds.to_zarr(zarr_store, mode='w')
