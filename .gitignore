@@ -181,6 +181,7 @@ data
 slurmout/
 checkpoints
 checkpoints_/
+checkpoints__
 wandb/
 physicsnemo:25.03.tar
 Sparse_to_Dense_best_model.pt
