@@ -36,29 +36,26 @@ from sampler import DistributedEvalSampler
 from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_model_checkpoint, restore_model_checkpoint, init_zarr_store
 
 # %%
-def run_test(model, test_dataloader, test_dates_range, criterion, metric, device,
-               checkpoint_dir, variable , target_transform=None,n_inference_stations=None):
+def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, metric, device,
+               checkpoint_dir, variable , target_zarr_store,target_transform=None):
     # load the best model Handle DDP 'module.' prefix
     best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
     model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
 
     # === Creating a zarr for test data ===
-    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq='h')
-    if n_inference_stations is not None:
-        zarr_store = f'{checkpoint_dir}/{n_inference_stations}-inference-stations/RTMA_test.zarr'
-    else:
-        zarr_store = f'{checkpoint_dir}/all-inference-stations/RTMA_test.zarr'
-    os.makedirs(zarr_store, exist_ok=True)
-    init_zarr_store(zarr_store, dates, variable)
-    print(f"Zarr store initialized at {zarr_store}.")
+    dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq=f'{freq}min')
+    chunk_size = 24 * 60 // freq  # 24 hours in minutes divided by frequency
+
+    init_zarr_store(target_zarr_store, dates, variable, chunk_size=chunk_size)
+    print(f"Zarr store initialized at {target_zarr_store}.")
 
     # === Step 2: Evaluate and write predictions using matched time indices ===
-    ds = xr.open_zarr(zarr_store, consolidated=False)
+    ds = xr.open_zarr(target_zarr_store, consolidated=False)
     zarr_time = ds['time'].values  # dtype=datetime64[ns]
     time_to_idx = {t: i for i, t in enumerate(zarr_time)}
 
     # Use low-level Zarr for writing directly
-    zarr_write = zarr.open(zarr_store, mode='a')
+    zarr_write = zarr.open(target_zarr_store, mode='a')
     zarr_variable = zarr_write[variable]
 
     # === testing and saving into test zarr===
@@ -68,7 +65,8 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     show_progress = True
     test_bar = tqdm(test_dataloader, desc=f"[Test]", leave=False) if show_progress else test_dataloader
     with torch.no_grad():
-        for batch in test_bar:
+        for b,batch in enumerate(test_bar):
+            print(f"Processing batch {b+1}")
             input_tensor, target_tensor, time_value = batch
             input_tensor = input_tensor.to(device, non_blocking=True)
             target_tensor = target_tensor.to(device, non_blocking=True)
@@ -84,6 +82,13 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
             if target_transform is not None:
                 output = target_transform.inverse(output)
                 target_tensor = target_transform.inverse(target_tensor)
+            # Apply masking, since we don't need the values outside NYS
+            output = torch.where(torch.tensor(mask.values).to(device=device),output,0)
+            # Clamping the output to be non-negative
+            output = torch.clamp(output, min=0.0)
+            target_tensor = torch.where(torch.tensor(mask.values).to(device=device),target_tensor,0)
+            # Clamping the target tensor to be non-negative
+            target_tensor = torch.clamp(target_tensor, min=0.0)
 
             # Compute the metric
             metric_value = metric(output, target_tensor, station_mask)
@@ -96,14 +101,19 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
             output_np = output.cpu().numpy()    # [B, 1, H, W]
             time_np = np.array(time_value, dtype='datetime64[ns]')
 
+            # Collect all indices and outputs, then write in batch after loop
+            idx_list, data_list = [], []
             # Match and write to correct time indices
             for i, t in enumerate(time_np):
                 idx = time_to_idx.get(t)
                 if idx is not None:
-                    # Write to zarr
-                    zarr_variable[idx] = (output_np[i]).squeeze(0)
+                    idx_list.append(idx)
+                    data_list.append(output_np[i].squeeze(0))
                 else:
                     print(f"Warning: Time {t} not found in time axis.")
+            # Now write once
+            if idx_list:
+                zarr_variable.oindex[idx_list] = np.stack(data_list)
         
     avg_test_loss = test_loss_total / len(test_dataloader)
     avg_test_metric = test_metric_total / len(test_dataloader)
@@ -112,7 +122,8 @@ def run_test(model, test_dataloader, test_dates_range, criterion, metric, device
     wandb.log({"Test Loss": avg_test_loss, "Test Metric": avg_test_metric})
 
 # %%
-if __name__ == "__main__":      
+if __name__ == "__main__":  
+    # %%    
     # This is the main entry point of the script. 
 
     # === Args for interactive debugging ===
@@ -128,21 +139,22 @@ if __name__ == "__main__":
             "--variable", "i10fg",
             "--model", "UNet",
             "--orography_as_channel", "true",
-            "--additional_input_variables", "none",
+            "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
             "--n_random_stations", "none",
-            "--randomize_stations_persample", "true",
+            "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--epochs", "2",
-            "--batch_size", "16",
-            "--num_workers", "32",
+            "--batch_size", "24",
+            "--num_workers", "0",
             "--wandb_id", "none",
             # "--resume",  # Optional flag — include if you want to resume
             "--weights_seed", "42",
             "--activation_layer", "gelu",
-            "--n_inference_stations", "none"
+            "--inference_stations_seed", "43",
+            "--n_inference_stations", "100", 
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -176,6 +188,8 @@ if __name__ == "__main__":
     parser.add_argument("--weights_seed", type=int, default=42, help="Seed for weight initialization")
     parser.add_argument("--activation_layer", type=str, default="gelu", 
                         help="Activation layer to use ('gelu', 'relu', 'leakyrelu')")
+    parser.add_argument("--inference_stations_seed", type=int, default=42,
+                        help="Seed for inference stations, used to select random stations if n_inference_stations is not None")
     parser.add_argument("--n_inference_stations", type=int_or_none, default=None,
                         help="Number of inference stations to use, if None, all stations will be used") 
     args, unknown = parser.parse_known_args()
@@ -221,7 +235,7 @@ if __name__ == "__main__":
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
         else:
-            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
+            checkpoint_dir = f"{checkpoint_dir}/all-stations"
     else:
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations-per-sample"
@@ -237,12 +251,18 @@ if __name__ == "__main__":
     activation_layer = args.activation_layer
     weights_seed = args.weights_seed
 
-    n_inference_stations = args.n_inference_stations
-
     checkpoint_dir = checkpoint_dir+'/'+activation_layer+'-'+str(weights_seed)
     
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    n_inference_stations = args.n_inference_stations
+    inference_stations_seed = args.inference_stations_seed
+    if n_inference_stations is not None:
+        target_zarr_store = f'{checkpoint_dir}/{inference_stations_seed}/{n_inference_stations}-inference-stations/RTMA_test.zarr'
+    else:
+        target_zarr_store = f'{checkpoint_dir}/all-inference-stations/RTMA_test.zarr'
+    os.makedirs(target_zarr_store, exist_ok=True)
 
     num_epochs = args.epochs
     resume = args.resume
@@ -281,6 +301,9 @@ if __name__ == "__main__":
     f"  stations_seed: {stations_seed}\n"
     f"  n_random_stations: {n_random_stations}\n"
     f" randomize_stations_persample: {randomize_stations_persample}\n"
+    f" inference_stations_seed: {inference_stations_seed}\n"
+    f"  n_inference_stations: {n_inference_stations}\n"
+    f" target_zarr_store: {target_zarr_store}\n"
     f"  loss_name: {loss_name}\n"
     f"  transform: {transform}\n"
     f"  num_epochs: {num_epochs}\n"
@@ -296,10 +319,10 @@ if __name__ == "__main__":
     
     # %%
     # === Loading some topography and masking data ===
-    orography = xr.open_dataset('orography.nc').orog
+    orography = xr.open_dataset('orography.nc')
     RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
     RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
-    orography = orography.values
+    orography = orography.orog.values
 
     mask = xr.open_dataset('mask_2d.nc').mask
     mask_tensor = torch.tensor(mask.values.astype(np.float32), device=device)  # [H, W], defnitely send it to device
@@ -324,6 +347,7 @@ if __name__ == "__main__":
     zarr_store = 'data/RTMA.zarr'
     validation_dates_range = ['2022-01-01T00', '2022-12-31T23']
     missing_times = xr.open_dataset(f'nan_times_{variable}.nc').time
+    freq = 60  # Frequency in minutes, can be changed if needed
     # if the additional input variables is not none, add the missing times of the additional input variables also. 
     if additional_input_variables is not None:
         for var in additional_input_variables:
@@ -456,11 +480,11 @@ if __name__ == "__main__":
     if not dist.is_initialized() or dist.get_rank() == 0:
         if args.wandb_id is not None:
             wandb.init(
-                project="Testing",id=args.wandb_id,resume='allow',
+                project="RTMA_inference",id=args.wandb_id,resume='allow',
             )
         else:
             wandb.init(
-                project="Testing",
+                project="RTMA_inference",
                 name=checkpoint_dir[len('checkpoints/'):].replace('/','_'),
                 config={
                     "variable": variable,
@@ -483,11 +507,12 @@ if __name__ == "__main__":
                     "orography_as_channel": orography_as_channel,
                     "activation_layer": args.activation_layer,
                     "weights_seed": args.weights_seed,
+                    "inference_stations_seed": inference_stations_seed,
                     "n_inference_stations": n_inference_stations,
                     "randomize_stations_persample": randomize_stations_persample,
                 }
             )
-
+    # %%
     # === Run the test and save the outputs to zarr ===
     rank = dist.get_rank() if dist.is_initialized() else 0
     if rank == 0:
@@ -507,9 +532,8 @@ if __name__ == "__main__":
             missing_times,
             input_transform=input_transform,
             target_transform=target_transform,
-            n_random_stations=n_inference_stations,     # During training we pass n_random_stations, while in inference, we pass the number of inference stations
-            stations_seed=stations_seed,
-            randomize_stations_persample=False       # We always set randomize_stations_persample to False during inference, to control the number of stations
+            stations_seed=inference_stations_seed,  # This is a key change, since we may use different seed for inference stations.
+            n_random_stations=n_inference_stations,     # This is a key change, since we may use different number of stations during inference.
         )
         test_sampler = None
         test_dataloader = DataLoader(
@@ -521,23 +545,25 @@ if __name__ == "__main__":
             num_workers=num_workers,
             drop_last=False
         )
-
+    
         print("Test data loaded successfully.")
         print(f"Test dataset size: {len(test_dataset)}")
 
-
+        # %%
         print("Starting Testing...")
         run_test(
             model = model, 
             test_dataloader = test_dataloader,
             test_dates_range = test_dates_range,
+            freq = freq,
+            mask = mask,
             criterion = criterion,
             metric = metric,
             device = device,
             checkpoint_dir = checkpoint_dir,
             variable = variable, 
-            target_transform = target_transform,
-            n_inference_stations = n_inference_stations
+            target_zarr_store = target_zarr_store,
+            target_transform = target_transform
         )
     
     # === Finish run and destroy process group ===
@@ -546,3 +572,5 @@ if __name__ == "__main__":
     if dist.is_initialized():
         dist.barrier()
         dist.destroy_process_group()
+    print("Finished testing and cleaned up.")
+

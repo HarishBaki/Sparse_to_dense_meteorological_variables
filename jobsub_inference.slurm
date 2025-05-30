@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-task=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=24
 # #SBATCH --exclude=dgx02 #only needed for dgx
 # #SBATCH --container-image=/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh
 # #SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
@@ -41,7 +41,8 @@ batch_size=${batch_size:-24}
 wandb_id=${wandb_id:-'none'}
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
-n_inference_stations=${n_inference_stations:-'none'} # 'none' or a number
+inference_stations_seed=${inference_stations_seed:-43} # Seed for inference stations, if applicable
+n_inference_stations=${n_inference_stations:-100} # 'none' or a number
 
 echo "----------------------------------------"
 echo "Launching training with the following settings:"
@@ -62,6 +63,7 @@ echo "Checkpoint dir:          $checkpoint_dir"
 echo "WandB ID:                $wandb_id"
 echo "Weights seed:            $weights_seed"
 echo "Activation layer:        $activation_layer"
+echo "Inference stations seed: $inference_stations_seed"
 echo "Inference stations:      $n_inference_stations"
 echo "----------------------------------------"
 echo "NProc per node:          $nproc_per_node"
@@ -71,7 +73,7 @@ echo "----------------------------------------"
 # Install required Python packages inside the container
 pip install --quiet timm torchmetrics seaborn
 
-torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_inference.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT RTMA_inference.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
 --model $model \
@@ -89,5 +91,6 @@ torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_infere
 --wandb_id $wandb_id \
 --weights_seed $weights_seed \
 --activation_layer $activation_layer \
+--inference_stations_seed $inference_stations_seed \
 --n_inference_stations $n_inference_stations
 #--resume
