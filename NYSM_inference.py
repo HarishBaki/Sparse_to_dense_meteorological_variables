@@ -37,7 +37,7 @@ from util import str_or_none, int_or_none, bool_from_str, EarlyStopping, save_mo
 
 # %%
 def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, metric, device,
-               checkpoint_dir, variable , target_transform=None,n_inference_stations=None):
+               checkpoint_dir, variable , zarr_store,target_transform=None):
     # load the best model Handle DDP 'module.' prefix
     best_ckpt_path = os.path.join(checkpoint_dir, "best_model.pt")
     model, _, _, _ = restore_model_checkpoint(model, optimizer, scheduler, best_ckpt_path, device)
@@ -45,11 +45,7 @@ def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, me
     # === Creating a zarr for test data ===
     dates = pd.date_range(start=test_dates_range[0], end=test_dates_range[1], freq=f'{freq}min')
     chunk_size = 24 * 60 // freq  # 24 hours in minutes divided by frequency
-    if n_inference_stations is not None:
-        zarr_store = f'{checkpoint_dir}/{n_inference_stations}-inference-stations/NYSM_test.zarr'
-    else:
-        zarr_store = f'{checkpoint_dir}/all-inference-stations/NYSM_test.zarr'
-    os.makedirs(zarr_store, exist_ok=True)
+
     init_zarr_store(zarr_store, dates, variable, chunk_size=chunk_size)
     print(f"Zarr store initialized at {zarr_store}.")
 
@@ -118,7 +114,7 @@ if __name__ == "__main__":
             "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
-            "--n_random_stations", "none",
+            "--n_random_stations", "50",
             "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
@@ -129,6 +125,7 @@ if __name__ == "__main__":
             # "--resume",  # Optional flag — include if you want to resume
             "--weights_seed", "42",
             "--activation_layer", "gelu",
+            "--inference_stations_seed", "42",
             "--n_inference_stations", "none", 
         ]
         print("DEBUG: Using injected args:", sys.argv)
@@ -163,6 +160,8 @@ if __name__ == "__main__":
     parser.add_argument("--weights_seed", type=int, default=42, help="Seed for weight initialization")
     parser.add_argument("--activation_layer", type=str, default="gelu", 
                         help="Activation layer to use ('gelu', 'relu', 'leakyrelu')")
+    parser.add_argument("--inference_stations_seed", type=int, default=42,
+                        help="Seed for inference stations, used to select random stations if n_inference_stations is not None")
     parser.add_argument("--n_inference_stations", type=int_or_none, default=None,
                         help="Number of inference stations to use, if None, all stations will be used") 
     args, unknown = parser.parse_known_args()
@@ -208,7 +207,7 @@ if __name__ == "__main__":
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
         else:
-            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
+            checkpoint_dir = f"{checkpoint_dir}/all-stations"
     else:
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations-per-sample"
@@ -224,12 +223,18 @@ if __name__ == "__main__":
     activation_layer = args.activation_layer
     weights_seed = args.weights_seed
 
-    n_inference_stations = args.n_inference_stations
-
     checkpoint_dir = checkpoint_dir+'/'+activation_layer+'-'+str(weights_seed)
     
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    n_inference_stations = args.n_inference_stations
+    inference_stations_seed = args.inference_stations_seed
+    if n_inference_stations is not None:
+        target_zarr_store = f'{checkpoint_dir}/{inference_stations_seed}/{n_inference_stations}-inference-stations/NYSM_test.zarr'
+    else:
+        target_zarr_store = f'{checkpoint_dir}/all-inference-stations/NYSM_test.zarr'
+    os.makedirs(target_zarr_store, exist_ok=True)
 
     num_epochs = args.epochs
     resume = args.resume
@@ -268,6 +273,9 @@ if __name__ == "__main__":
     f"  stations_seed: {stations_seed}\n"
     f"  n_random_stations: {n_random_stations}\n"
     f" randomize_stations_persample: {randomize_stations_persample}\n"
+    f" inference_stations_seed: {inference_stations_seed}\n"
+    f"  n_inference_stations: {n_inference_stations}\n"
+    f" target_zarr_store: {target_zarr_store}\n"
     f"  loss_name: {loss_name}\n"
     f"  transform: {transform}\n"
     f"  num_epochs: {num_epochs}\n"
@@ -479,6 +487,7 @@ if __name__ == "__main__":
                     "orography_as_channel": orography_as_channel,
                     "activation_layer": args.activation_layer,
                     "weights_seed": args.weights_seed,
+                    "inference_stations_seed": inference_stations_seed,
                     "n_inference_stations": n_inference_stations,
                     "randomize_stations_persample": randomize_stations_persample,
                 }
@@ -506,7 +515,7 @@ if __name__ == "__main__":
             None,
             input_transform=input_transform,
             target_transform=target_transform,
-            stations_seed=stations_seed,
+            stations_seed=inference_stations_seed,  # This is a key change, since we may use different seed for inference stations.
             n_random_stations=n_inference_stations,     # This is a key change, since we may use different number of stations during inference.
         )
         test_sampler = None
@@ -536,8 +545,8 @@ if __name__ == "__main__":
             device = device,
             checkpoint_dir = checkpoint_dir,
             variable = variable, 
-            target_transform = target_transform,
-            n_inference_stations = n_inference_stations
+            zarr_store = target_zarr_store,
+            target_transform = target_transform
         )
     
     # === Finish run and destroy process group ===
