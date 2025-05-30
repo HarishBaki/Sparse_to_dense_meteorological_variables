@@ -1,7 +1,7 @@
 #!/bin/bash
 n_random_stationss=("50" "75" "100" "none")
 randomize_stations_persamples=("true" "false")
-n_inference_stationss=("50" "75" "100" "none")
+n_inference_stationss=("50" "75" "100")
 orography_as_channel='true'
 additional_input_variables='si10,t2m,sh2'
 train_years_range='2018,2021'
