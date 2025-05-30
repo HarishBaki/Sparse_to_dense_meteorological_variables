@@ -17,4 +17,4 @@ H = Herbie(
     save_dir = download_path,
 )
 
-H.download(f"{variable}:{level}",verbose=False)
+H.download(f"{variable}:{level}",verbose=False,overwrite=True)

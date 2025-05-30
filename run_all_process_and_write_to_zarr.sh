@@ -1,7 +1,7 @@
 # === Variable names (external and internal) ===
 
 # External names (folder-level or processing-level names)
-variables=("i10fg" "DPT" "PRES" "SPFH" "t2m" "WDIR" "WIND")
+variables=("GUST" "DPT" "PRES" "SPFH" "TMP" "WDIR" "WIND")
 # Corresponding internal variable names (used inside individual NetCDF/Zarr files)
 var_names=("i10fg" "d2m" "sp" "sh2" "t2m" "wdir10" "si10")
 
@@ -10,7 +10,7 @@ for i in "${!variables[@]}"; do
     var_name="${var_names[$i]}"
 
     # Set mode: 'w' for i10fg (first write), 'a' for all others
-    if [[ "$variable" == "i10fg" ]]; then
+    if [[ "$variable" == "GUST" ]]; then
         mode="w"
     else
         mode="a"
