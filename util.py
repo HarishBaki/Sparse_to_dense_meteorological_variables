@@ -116,4 +116,4 @@ def init_zarr_store(zarr_store, dates, variable, chunk_size=24):
     )
 
     ds = template.to_dataset()
-    ds.to_zarr(zarr_store, mode='w')
+    ds.to_zarr(zarr_store,compute=False ,mode='w')
