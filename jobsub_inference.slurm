@@ -13,9 +13,13 @@
 # #SBATCH --container-image=/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh
 # #SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
 # #SBATCH --container-workdir=/mnt/current_project
-#SBATCH --container-image=/home/harish/softwares/container_images/physicsnemo:25.03.sqsh
-#SBATCH --container-mounts=/home/harish:/home/harish,/home/harish/Ongoing_Research/Sparse_to_dense_meteorological_variables:/workspace,/data/harish/Sparse_to_dense_meteorological_variables:/workspace/data
-#SBATCH --container-workdir=/workspace
+# #SBATCH --container-image=/home/harish/softwares/container_images/physicsnemo:25.03.sqsh
+# #SBATCH --container-mounts=/home/harish:/home/harish,/home/harish/Ongoing_Research/Sparse_to_dense_meteorological_variables:/workspace,/data/harish/Sparse_to_dense_meteorological_variables:/workspace/data
+# #SBATCH --container-workdir=/workspace
+
+# === Activate Conda Environment ===
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate gUstNET   # Replace with your actual env name
 
 # Optionally pass SLURM values into the shell script as environment variables
 export nproc_per_node=${SLURM_NTASKS_PER_NODE}
