@@ -46,14 +46,15 @@ if __name__ == "__main__":
             "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
-            "--n_random_stations", "none",
+            "--n_random_stations", "50",
             "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--weights_seed", "42",
             "--activation_layer", "gelu",
-            "--n_inference_stations", "none", 
-            "--data_type","NYSM",
+            "--inference_stations_seed", "43",
+            "--n_inference_stations", "50", 
+            "--data_type","RTMA",
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("--weights_seed", type=int, default=42, help="Seed for weight initialization")
     parser.add_argument("--activation_layer", type=str, default="gelu", 
                         help="Activation layer to use ('gelu', 'relu', 'leakyrelu')")
+    parser.add_argument("--inference_stations_seed", type=int, default=42,
+                        help="Seed for inference stations, used to select random stations if n_inference_stations is not None")
     parser.add_argument("--n_inference_stations", type=int_or_none, default=None,
                         help="Number of inference stations to use, if None, all stations will be used") 
     parser.add_argument("--data_type", type=str, default="RTMA")
@@ -137,7 +140,7 @@ if __name__ == "__main__":
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations"
         else:
-            checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/all-stations"
+            checkpoint_dir = f"{checkpoint_dir}/all-stations"
     else:
         if n_random_stations is not None:
             checkpoint_dir = f"{checkpoint_dir}/{stations_seed}/{n_random_stations}-random-stations-per-sample"
@@ -149,9 +152,10 @@ if __name__ == "__main__":
     checkpoint_dir = checkpoint_dir+'/'+transform
 
     checkpoint_dir = checkpoint_dir+'/'+activation_layer+'-'+str(weights_seed)
-
+    n_inference_stations = args.n_inference_stations
+    inference_stations_seed = args.inference_stations_seed
     if n_inference_stations is not None:
-        test_dir = f'{checkpoint_dir}/{n_inference_stations}-inference-stations'
+        test_dir = f'{checkpoint_dir}/{inference_stations_seed}/{n_inference_stations}-inference-stations'
     else:
         test_dir = f'{checkpoint_dir}/all-inference-stations'
     
@@ -306,7 +310,7 @@ if __name__ == "__main__":
     nan_mask = torch.isnan(target_tensor) | torch.isnan(test_tensor)
     target_tensor = target_tensor.masked_fill(nan_mask, 0.0)
     test_tensor = test_tensor.masked_fill(nan_mask, 0.0)
-    
+    # %%
     summary_values = []
     for key in metric_names:
         reduction = 'global' if key == 'masked_rmse' else 'elementwise_mean'
@@ -323,6 +327,6 @@ if __name__ == "__main__":
 
     ds_all_vars[variable] = da
     ds_all_vars[f"{variable}_summary"] = summary_da
-
+    # %%
     combined_ds = xr.Dataset(ds_all_vars)
     combined_ds.to_netcdf(f'{test_dir}/{data_type}_test_metrics.nc')

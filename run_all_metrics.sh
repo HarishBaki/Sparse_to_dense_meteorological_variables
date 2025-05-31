@@ -1,7 +1,7 @@
 #!/bin/bash
 
 variable='i10fg'
-data_types=("RTMA" "NYSM")
+data_types=("RTMA")
 models=("DCNN" "UNet" "SwinT2UNet")
 orography_as_channels=("false" "true")
 additional_input_variabless=("si10" "si10,t2m" "si10,t2m,sh2")
@@ -43,18 +43,22 @@ train_years_range='2018,2021'
 orography_as_channel='true'
 additional_input_variables='si10,t2m,sh2'
 n_random_stationss=("none" "50" "75" "100")
-n_inference_stationss=("none" "50" "75" "100")
-randomize_stations_persample='true'
+n_inference_stationss=("50" "75" "100")
+randomize_stations_persamples=("true" "false")
+inference_stations_seeds=(43 44 45 46) # Different seeds for inference stations
 for data_type in "${data_types[@]}"; do
-    for n_random_stations in "${n_random_stationss[@]}"; do
-        for n_inference_stations in "${n_inference_stationss[@]}"; do
-            export variable data_type model orography_as_channel additional_input_variables train_years_range n_random_stations n_inference_stations randomize_stations_persample
-            export -p | grep -E 'variable|data_type|model|orography_as_channel|additional_input_variables|train_years_range|n_random_stations|n_inference_stations|randomize_stations_persample'
-            echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel, additional_input_variables: $additional_input_variables, train_years_range: $train_years_range, n_random_stations: $n_random_stations, n_inference_stations: $n_inference_stations, randomize_stations_persample: $randomize_stations_persample"
-            sbatch --export=All jobsub_metrics.slurm
+    for inference_stations_seed in "${inference_stations_seeds[@]}"; do
+        for randomize_stations_persample in "${randomize_stations_persamples[@]}"; do
+            for n_random_stations in "${n_random_stationss[@]}"; do
+                for n_inference_stations in "${n_inference_stationss[@]}"; do
+                    export variable data_type model orography_as_channel additional_input_variables train_years_range n_random_stations n_inference_stations randomize_stations_persample inference_stations_seed
+                    sbatch --export=All jobsub_metrics.slurm
+                done
+            done
         done
     done
 done
+
 if false; then  
     model="UNet"
     variable='si10'

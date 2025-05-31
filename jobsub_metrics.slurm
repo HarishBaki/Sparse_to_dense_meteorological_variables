@@ -28,14 +28,15 @@ orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
 additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
-n_random_stations=${n_random_stations:-'none'} # 'none' or a number
+n_random_stations=${n_random_stations:-'50'} # 'none' or a number
 randomize_stations_persample=${randomize_stations_persample:-'false'} # 'true' or 'false'
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
-n_inference_stations=${n_inference_stations:-'none'} # 'none' or a number
-data_type=${data_type:-'NYSM'}
+inference_stations_seed=${inference_stations_seed:-43} # Seed for inference stations, if applicable
+n_inference_stations=${n_inference_stations:-'50'} # 'none' or a number
+data_type=${data_type:-'RTMA'}
 
 echo "----------------------------------------"
 echo "Launching training with the following settings:"
@@ -52,6 +53,7 @@ echo "Loss:                    $loss"
 echo "Transform:               $transform"
 echo "Weights seed:            $weights_seed"
 echo "Activation layer:        $activation_layer"
+echo "Inference stations seed: $inference_stations_seed"
 echo "Inference stations:      $n_inference_stations"
 echo "Data type:               $data_type"
 echo "----------------------------------------"
@@ -73,5 +75,6 @@ python compute_metrics.py \
 --transform $transform \
 --weights_seed $weights_seed \
 --activation_layer $activation_layer \
+--inference_stations_seed $inference_stations_seed \
 --n_inference_stations $n_inference_stations \
 --data_type $data_type 
