@@ -48,16 +48,16 @@ def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, me
 
     init_zarr_store(target_zarr_store, dates, variable, chunk_size=chunk_size)
     print(f"Zarr store initialized at {target_zarr_store}.")
-
+    
     # === Step 2: Evaluate and write predictions using matched time indices ===
     ds = xr.open_zarr(target_zarr_store, consolidated=False)
     zarr_time = ds['time'].values  # dtype=datetime64[ns]
     time_to_idx = {t: i for i, t in enumerate(zarr_time)}
-
+    
     # Use low-level Zarr for writing directly
     zarr_write = zarr.open(target_zarr_store, mode='a')
     zarr_variable = zarr_write[variable]
-
+    
     # === testing and saving into test zarr===
     model.eval()
     test_loss_total = 0.0
@@ -66,7 +66,7 @@ def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, me
     test_bar = tqdm(test_dataloader, desc=f"[Test]", leave=False) if show_progress else test_dataloader
     with torch.no_grad():
         for b,batch in enumerate(test_bar):
-            print(f"Processing batch {b+1}")
+            #print(f"Processing batch {b+1}")
             input_tensor, target_tensor, time_value = batch
             input_tensor = input_tensor.to(device, non_blocking=True)
             target_tensor = target_tensor.to(device, non_blocking=True)
@@ -100,7 +100,6 @@ def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, me
             # create an xarray dataset from the output
             output_np = output.cpu().numpy()    # [B, 1, H, W]
             time_np = np.array(time_value, dtype='datetime64[ns]')
-
             # Collect all indices and outputs, then write in batch after loop
             idx_list, data_list = [], []
             # Match and write to correct time indices
@@ -113,8 +112,7 @@ def run_test(model, test_dataloader, test_dates_range, freq, mask, criterion, me
                     print(f"Warning: Time {t} not found in time axis.")
             # Now write once
             if idx_list:
-                zarr_variable.oindex[idx_list] = np.stack(data_list)
-        
+                zarr_variable.oindex[idx_list] = np.stack(data_list)            
     avg_test_loss = test_loss_total / len(test_dataloader)
     avg_test_metric = test_metric_total / len(test_dataloader)
     print(f"Test Loss: {avg_test_loss:.4f} | Test Metric: {avg_test_metric:.4f}")
@@ -148,7 +146,7 @@ if __name__ == "__main__":
             "--transform", "standard",
             "--epochs", "2",
             "--batch_size", "24",
-            "--num_workers", "0",
+            "--num_workers", "24",
             "--wandb_id", "none",
             # "--resume",  # Optional flag — include if you want to resume
             "--weights_seed", "42",

@@ -46,7 +46,7 @@ wandb_id=${wandb_id:-'none'}
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
 inference_stations_seed=${inference_stations_seed:-43} # Seed for inference stations, if applicable
-n_inference_stations=${n_inference_stations:-100} # 'none' or a number
+n_inference_stations=${n_inference_stations:-50} # 'none' or a number
 
 echo "----------------------------------------"
 echo "Launching training with the following settings:"
