@@ -237,7 +237,7 @@ if __name__ == "__main__":
     NYSM_var_data = NYSM[variable].sel(time=slice(*test_dates_range))
 
     if n_inference_stations is not None:
-        rng = np.random.default_rng(stations_seed)
+        rng = np.random.default_rng(inference_stations_seed)
         perm = rng.permutation(len(nysm_latlon))
         random_indices = perm[:n_inference_stations]
         y_indices = y_indices[random_indices]
