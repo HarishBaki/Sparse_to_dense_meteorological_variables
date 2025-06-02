@@ -186,3 +186,5 @@ wandb/
 physicsnemo:25.03.tar
 Sparse_to_Dense_best_model.pt
 i10fg_UNet_orography-si10-t2m-sh2_confusion_matrix_results.csv
+nysm_dict.pkl
+test_data_dict.pkl
