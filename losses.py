@@ -233,3 +233,59 @@ class MaskedSSIM(nn.Module):
 
         ssim = StructuralSimilarityIndexMeasure(reduction=reduction,data_range=data_range)
         return ssim(x, y)
+
+class MaskedCombinedMAEQuantileLoss(nn.Module):
+    """
+    Combined masked loss: MAE and Quantile Loss (e.g., 95th percentile) for 2D spatial maps
+    Applies masking to exclude station locations and non-domain regions.
+    """
+    def __init__(self, mask_2d, tau=0.95, mae_weight=0.5, quantile_weight=0.5):
+        """
+        mask_2d: torch.Tensor of shape [H, W], NY domain mask
+        tau: quantile level (e.g., 0.95)
+        """
+        super().__init__()
+        self.register_buffer("mask_2d", mask_2d.float())
+        self.tau = tau
+        self.mae_weight = mae_weight
+        self.quantile_weight = quantile_weight
+
+    def forward(self, output, target, station_mask, reduction='mean'):
+        """
+        output: [B, 1, H, W]
+        target: [B, 1, H, W]
+        station_mask: [B, 1, H, W]
+        reduction: 'none', 'mean', or 'global'
+        """
+        assert reduction in ['mean', 'none', 'global']
+        B, _, H, W = output.shape
+
+        mask = self.mask_2d.unsqueeze(0).unsqueeze(0)  # [1,1,H,W]
+        valid_mask = (mask == 1) & (station_mask == 0)  # [B,1,H,W]
+        valid_mask = valid_mask.float()
+
+        abs_error = torch.abs(output - target)
+        error = target - output
+        quantile_error = torch.max(self.tau * error, (self.tau - 1) * error)
+
+        mae_masked = abs_error * valid_mask
+        quantile_masked = quantile_error * valid_mask
+
+        mae_sum_per_sample = mae_masked.view(B, -1).sum(dim=1)
+        quantile_sum_per_sample = quantile_masked.view(B, -1).sum(dim=1)
+        valid_counts = valid_mask.view(B, -1).sum(dim=1).clamp(min=1.0)
+
+        mae_per_sample = mae_sum_per_sample / valid_counts
+        quantile_per_sample = quantile_sum_per_sample / valid_counts
+
+        combined_per_sample = self.mae_weight * mae_per_sample + self.quantile_weight * quantile_per_sample
+
+        if reduction == 'none':
+            return combined_per_sample  # [B]
+        elif reduction == 'mean':
+            return combined_per_sample.mean()  # scalar
+        elif reduction == 'global':
+            total_mae = mae_sum_per_sample.sum()
+            total_qtl = quantile_sum_per_sample.sum()
+            total_count = valid_counts.sum().clamp(min=1.0)
+            return (self.mae_weight * total_mae + self.quantile_weight * total_qtl) / total_count  # scalar
