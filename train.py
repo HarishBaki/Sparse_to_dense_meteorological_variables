@@ -181,7 +181,7 @@ if __name__ == "__main__":
             "--stations_seed", "42",
             "--n_random_stations", "none",
             "--randomize_stations_persample", "true",
-            "--loss", "MaskedCharbonnierLoss",
+            "--loss", "MaskedCombinedMAEQuantileLoss",
             "--transform", "standard",
             "--epochs", "2",
             "--batch_size", "16",
@@ -339,10 +339,10 @@ if __name__ == "__main__":
     
     # %%
     # === Loading some topography and masking data ===
-    orography = xr.open_dataset('orography.nc').orog
+    orography = xr.open_dataset('orography.nc')
     RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
     RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
-    orography = orography.values
+    orography = orography.orog.values
 
     mask = xr.open_dataset('mask_2d.nc').mask
     mask_tensor = torch.tensor(mask.values.astype(np.float32), device=device)  # [H, W], defnitely send it to device
