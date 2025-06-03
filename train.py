@@ -29,7 +29,7 @@ from models.UNet import UNet
 from models.SwinT2_UNet import SwinT2UNet
 from models.util import initialize_weights_xavier,initialize_weights_he
 
-from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnierLoss
+from losses import MaskedMSELoss, MaskedRMSELoss, MaskedTVLoss, MaskedCharbonnierLoss, MaskedCombinedMAEQuantileLoss
 
 from sampler import DistributedEvalSampler
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("--randomize_stations_persample", type=bool_from_str, default=False, 
                         help="Randomize stations for each sample: True or False")
     parser.add_argument("--loss", type=str, default="MaskedCharbonnierLoss", 
-                        help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss')")
+                        help="Loss function to use ('MaskedMSELoss', 'MaskedRMSELoss', 'MaskedTVLoss', 'MaskedCharbonnierLoss', 'MaskedCombinedMAEQuantileLoss')")
     parser.add_argument("--transform", type=str, default="standard", 
                         help="Transform to apply to the data ('none', 'minmax', 'standard')")
     parser.add_argument("--epochs", type=int, default=120, help="Number of training epochs")
@@ -556,6 +556,8 @@ if __name__ == "__main__":
         criterion = MaskedTVLoss(mask_tensor,tv_loss_weight=0.001, beta=0.5)    
     elif loss_name == "MaskedCharbonnierLoss":
         criterion = MaskedCharbonnierLoss(mask_tensor,eps=1e-3)
+    elif loss_name == "MaskedCombinedMAEQuantileLoss":
+        criterion = MaskedCombinedMAEQuantileLoss(mask_tensor, quantile=0.95, mae_weight=0.5, quantile_weight=0.5)
     metric = MaskedRMSELoss(mask_tensor)
 
     # === Optimizer, scheduler, and early stopping ===
