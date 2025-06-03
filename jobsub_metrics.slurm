@@ -28,14 +28,14 @@ orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
 additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
-n_random_stations=${n_random_stations:-'50'} # 'none' or a number
+n_random_stations=${n_random_stations:-'none'} # 'none' or a number
 randomize_stations_persample=${randomize_stations_persample:-'false'} # 'true' or 'false'
 loss=${loss:-'MaskedCharbonnierLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 weights_seed=${weights_seed:-42}
 activation_layer=${activation_layer:-'gelu'} # 'gelu', 'relu', 'leakyrelu'
-inference_stations_seed=${inference_stations_seed:-44} # Seed for inference stations, if applicable
-n_inference_stations=${n_inference_stations:-'100'} # 'none' or a number
+inference_stations_seed=${inference_stations_seed:-42} # Seed for inference stations, if applicable
+n_inference_stations=${n_inference_stations:-'none'} # 'none' or a number
 data_type=${data_type:-'RTMA'}
 
 echo "----------------------------------------"
