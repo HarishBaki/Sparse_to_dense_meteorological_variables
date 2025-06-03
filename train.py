@@ -557,7 +557,7 @@ if __name__ == "__main__":
     elif loss_name == "MaskedCharbonnierLoss":
         criterion = MaskedCharbonnierLoss(mask_tensor,eps=1e-3)
     elif loss_name == "MaskedCombinedMAEQuantileLoss":
-        criterion = MaskedCombinedMAEQuantileLoss(mask_tensor, quantile=0.95, mae_weight=0.5, quantile_weight=0.5)
+        criterion = MaskedCombinedMAEQuantileLoss(mask_tensor, tau=0.95, mae_weight=0.5, quantile_weight=0.5)
     metric = MaskedRMSELoss(mask_tensor)
 
     # === Optimizer, scheduler, and early stopping ===
