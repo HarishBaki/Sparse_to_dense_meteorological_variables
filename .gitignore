@@ -192,3 +192,5 @@ rtma_dict_100.pkl
 rtma_dict_110.pkl
 test_data_dict_100.pkl
 test_data_dict_110.pkl
+output/
+test_data_dict.pkl
