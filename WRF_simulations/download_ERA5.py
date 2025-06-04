@@ -7,7 +7,7 @@ def download_era5_data(c, year: str, month: str, days: list):
     # Pressure-level variables: z, t, r
     c.retrieve("reanalysis-era5-pressure-levels", {
         "product_type":   "reanalysis",
-        "area":           "60.00/-20.00/40.00/20.00",
+        "area":           "55.00/-90.00/30.00/-60.00",
         "variable":       ["z", "t", "r"],
         "pressure_level": ["1", "2", "3", "5", "7", "10", "20", "30", "50", "70", "100",
                            "125", "150", "175", "200", "225", "250", "300", "350", "400",
@@ -22,7 +22,7 @@ def download_era5_data(c, year: str, month: str, days: list):
     # Pressure-level variables: u, v
     c.retrieve("reanalysis-era5-pressure-levels", {
         "product_type":   "reanalysis",
-        "area":           "60.00/-20.00/40.00/20.00",
+        "area":           "55.00/-90.00/30.00/-60.00",
         "variable":       ["u", "v"],
         "pressure_level": ["1", "2", "3", "5", "7", "10", "20", "30", "50", "70", "100",
                            "125", "150", "175", "200", "225", "250", "300", "350", "400",
@@ -37,7 +37,7 @@ def download_era5_data(c, year: str, month: str, days: list):
     # Single-level variables
     c.retrieve("reanalysis-era5-single-levels", {
         "product_type":   "reanalysis",
-        "area":           "60.00/-20.00/40.00/20.00",
+        "area":           "55.00/-90.00/30.00/-60.00",
         "variable":       ["10u", "10v", "2t", "2d", "msl", "sp", "sst", "skt",
                            "stl1", "stl2", "stl3", "stl4", "slt", "swvl1", "swvl2", "swvl3", "swvl4",
                            "sd", "rsn", "lsm", "ci"],
