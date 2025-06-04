@@ -7,7 +7,7 @@ root_dir='/media/ssd_2tb_evo/Sparse_to_dense_meteorological_variables/WRF_simula
 cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actual simulation case names
 start_dates=('2023-02-02_12:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
 end_dates=('2023-02-04_00:00:00' '2023-03-26_12:00:00' '2023-04-02_12:00:00' '2023-12-18_18:00:00')
-cdsapirc_files=('/home/harish/.cdsapirc_harishiiitn' '/home/harish/.cdsapirc_hbakialbany' '/home/harish/.cdsapirc_hbakitudelft' '/home/harish/.cdsapirc_sandhya')
+cdsapirc_files=('/home/harish/.cdsapirc_harishiiitn' '/home/harish/.cdsapirc_hbakialbany' '/home/harish/.cdsapirc_hbakitudelft')
 
 num_cdsapirc=${#cdsapirc_files[@]}
 
@@ -20,35 +20,35 @@ for i in "${!start_dates[@]}"; do
     mkdir -p "$grib_source_dir"
     cd "$grib_source_dir"
 
-        # Assign date ranges and .cdsapirc config
-        start_date="${start_dates[$i]}"
-        end_date="${end_dates[$i]}"
+        start_date=$(echo "${start_dates[$i]}" | sed 's/_/ /')
+        end_date=$(echo "${end_dates[$i]}" | sed 's/_/ /')
         cdsapirc_file="${cdsapirc_files[$((i % num_cdsapirc))]}"
 
-        echo "Processing simulation for:"
-        echo "  Start date: $start_date"
-        echo "  End date:   $end_date"
-        echo "  CDS API RC: $cdsapirc_file"
+        echo "Running case: $case"
+        echo "Start date: $start_date"
+        echo "End date:   $end_date"
+        echo "CDS API RC: $cdsapirc_file"
 
-        # Convert underscore to space for proper date parsing
-        current_date_fmt=$(echo "$start_date" | sed 's/_/ /')
-        end_date_fmt=$(echo "$end_date" | sed 's/_/ /')
+        # Get year, month (assume same year/month for now)
+        year=$(date -ud "$start_date" +"%Y")
+        month=$(date -ud "$start_date" +"%m")
 
-        while [ $(date -ud "$current_date_fmt" +%s) -le $(date -ud "$end_date_fmt" +%s) ]; do
-            year=$(date -ud "$current_date_fmt" +"%Y")
-            month=$(date -ud "$current_date_fmt" +"%m")
-            day=$(date -ud "$current_date_fmt" +"%d")
-            hour=$(date -ud "$current_date_fmt" +"%H")
+        # Get list of days between start and end
+        current_day=$(date -ud "$start_date" +"%Y-%m-%d")
+        end_day=$(date -ud "$end_date" +"%Y-%m-%d")
+        day_list=()
 
-            #formatted=$(date -ud "$current_date" +"%Y-%m-%d_%H:00:00")
-            #echo "$formatted"
-            echo $year $month $day $hour
-
-            # Increment by 1 hour
-            current_date_fmt=$(date -ud "$current_date_fmt 1 hour" +"%Y-%m-%d %H")
+        while [ "$(date -ud "$current_day" +%s)" -le "$(date -ud "$end_day" +%s)" ]; do
+            day_list+=("$(date -ud "$current_day" +"%d")")
+            current_day=$(date -ud "$current_day +1 day" +"%Y-%m-%d")
         done
 
+        # Join day list with commas
+        days_joined=$(IFS=, ; echo "${day_list[*]}")
+
+        echo "Year: $year, Month: $month, Days to download: $days_joined"
+
         # Execute the Python script
-        #python3 run_download_ERA5.py --root_dir "$root_dir" --start_date "$start_date" --end_date "$end_date" --cdsapirc_file "$cdsapirc_file"
+        python3 $root_dir/download_ERA5.py "$cdsapirc_file" "$year" "$month" "$days_joined" &
     cd $root_dir
 done
