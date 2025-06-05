@@ -9,8 +9,8 @@
 &geogrid
  parent_id         =  1,    1,   2,
  parent_grid_ratio =  1,    3,   3,
- i_parent_start    =  1,   20,  48,   
- j_parent_start    =  1,   15,  36,
+ i_parent_start    =  1,   36,  48,   
+ j_parent_start    =  1,   36,  48,
  e_we              = 194, 367, 811,
  e_sn              = 184, 337,  721,
  geog_data_res = 'default','default',
