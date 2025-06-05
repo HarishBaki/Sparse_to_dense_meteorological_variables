@@ -194,5 +194,14 @@ test_data_dict_100.pkl
 test_data_dict_110.pkl
 output/
 test_data_dict.pkl
+
+# WRF simulations
+WRF_simulations/case_1/Input_DATA
+WRF_simulations/case_2/Input_DATA
+WRF_simulations/case_3/Input_DATA
+WRF_simulations/case_4/Input_DATA
+WRF_simulations/WPS
+WRF_simulations/case_*/
+WRF_simulations/run_1_geogrid/*.nc
 Extreme_cases/
 test_rtma_data_dict.pkl
