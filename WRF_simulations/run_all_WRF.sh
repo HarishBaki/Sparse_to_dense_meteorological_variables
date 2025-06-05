@@ -50,6 +50,7 @@ for (( i=0; i<1; i++ )); do
 			cp $root_dir/myoutfields.txt .
 			
 			cp $root_dir/submit_wrf_turbulence.sh .
+			sbatch submit_wrf_turbulence.sh
 		cd $root_dir
 
 	done
