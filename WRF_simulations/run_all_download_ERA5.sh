@@ -52,3 +52,6 @@ for i in "${!start_dates[@]}"; do
         python3 $root_dir/download_ERA5.py "$cdsapirc_file" "$year" "$month" "$days_joined" &
     cd $root_dir
 done
+
+wait
+echo "All ERA5 downloads completed successfully."

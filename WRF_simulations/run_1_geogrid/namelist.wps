@@ -1,8 +1,8 @@
 &share
  wrf_core = 'ARW',
  max_dom = 3,
- start_date = '2020-09-18_12:00:00','2020-09-18_12:00:00','2020-09-18_12:00:00',
- end_date   = '2020-09-22_00:00:00','2020-09-22_00:00:00','2020-09-22_00:00:00',
+ start_date =
+ end_date =
  interval_seconds = 3600
 /
 
@@ -22,7 +22,7 @@
  truelat1  =  40.5,
  truelat2  =  45.0,
  stand_lon = -75.80,
- geog_data_path = '/data/WRF/DATA/geogV4/'
+ geog_data_path = '/home/sukanta/WRF/DATA/geogV4'
 /
 
 &ungrib
