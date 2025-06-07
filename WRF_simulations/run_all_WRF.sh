@@ -4,7 +4,8 @@ root_dir=$(pwd)
 cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actual simulation case names
 start_dates=('2023-02-02_12:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
 end_dates=('2023-02-04_00:00:00' '2023-03-26_12:00:00' '2023-04-02_12:00:00' '2023-12-18_18:00:00')
-for ((i=0;i<${#cases[@]};++i)); do
+#for ((i=0;i<${#cases[@]};++i)); do
+i=1
 	case=${cases[$i]}
 	start_date=$(echo "${start_dates[$i]}" | sed 's/_/ /')
 	end_date=$(echo "${end_dates[$i]}" | sed 's/_/ /')
@@ -46,10 +47,10 @@ for ((i=0;i<${#cases[@]};++i)); do
 			cp $root_dir/tslist .
 			cp $root_dir/myoutfields.txt .
 			
-			#cp $root_dir/submit_wrf_turbulence.sh .
-			cp $root_dir/submit_real_wrf_delftblue.sh .
-			#sbatch submit_wrf_turbulence.sh
-			sbatch submit_real_wrf_delftblue.sh
+			cp $root_dir/submit_wrf_turbulence.sh .
+			#cp $root_dir/submit_real_wrf_delftblue.sh .
+			sbatch submit_wrf_turbulence.sh
+			#sbatch submit_real_wrf_delftblue.sh
 		cd $root_dir
 	done
-done
+#done
