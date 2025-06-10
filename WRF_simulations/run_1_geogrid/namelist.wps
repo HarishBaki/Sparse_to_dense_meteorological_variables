@@ -22,7 +22,7 @@
  truelat1  =  40.5,
  truelat2  =  45.0,
  stand_lon = -75.80,
- geog_data_path = '/home/sukanta/WRF/DATA/geogV4'
+ geog_data_path = '/home/sukanta/WRF/DATA/geogV4'   !'/data/WRF/DATA/geogV4'
 /
 
 &ungrib
