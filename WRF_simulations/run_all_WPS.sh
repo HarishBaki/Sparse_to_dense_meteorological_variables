@@ -7,8 +7,8 @@ cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actua
 start_dates=('2023-02-02_12:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
 end_dates=('2023-02-04_00:00:00' '2023-03-26_12:00:00' '2023-04-02_12:00:00' '2023-12-18_18:00:00')
 
-for (( i=0; i<${#cases[@]}; i++ )); # remember, 0 means FLLJ_1
-do
+#for (( i=0; i<${#cases[@]}; i++ )); do
+i=0
     case=${cases[$i]}
     echo $case
     # there are folders in the WPS directory, which are ends with _geogrid. read them
@@ -33,6 +33,6 @@ do
         cd $root_dir
     done
     wait
-done
+#done
 wait
 echo "WPS pipeline completed" 
