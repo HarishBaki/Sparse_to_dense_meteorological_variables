@@ -20,7 +20,7 @@ i=0
 	end_hour=$(date -ud "$end_date" +"%H")
 
 	# call WRF pipeline here
-	for run in $(seq 2 6); do
+	for run in $(seq 6 6); do
 		run_dir=$case/WRF_run_$run
 
 		mkdir -p $run_dir
