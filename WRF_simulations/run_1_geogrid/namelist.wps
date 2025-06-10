@@ -1,6 +1,6 @@
 &share
  wrf_core = 'ARW',
- max_dom = 3,
+ max_dom = 2,
  start_date =
  end_date =
  interval_seconds = 3600
