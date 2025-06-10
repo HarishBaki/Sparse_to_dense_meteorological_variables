@@ -1,6 +1,6 @@
 WPS_source_dir=/media/sukanta/HD2/WRF/WRFV4.4/WPS # this is the WPS installation directory
 
-root_dir='/media/ssd_2tb_evo/Sparse_to_dense_meteorological_variables/WRF_simulations'
+root_dir=$(pwd)
 
 # Define simulation metadata
 cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actual simulation case names
