@@ -20,7 +20,7 @@ i=0
 	end_hour=$(date -ud "$end_date" +"%H")
 
 	# call WRF pipeline here
-	for run in $(seq 6 6); do
+	for run in $(seq 2 2); do
 		run_dir=$case/WRF_run_$run
 
 		mkdir -p $run_dir
@@ -29,9 +29,10 @@ i=0
 			# link metfiles
 			ln -sf $metgrid_dir/* .
 			
-			cp -r $WRF_DIR/run/* .
-			rm *.exe
-			rm namelist.input
+			#cp -r $WRF_DIR/run/* .
+			rsync -av --exclude='namelist.input' --exclude='*.exe' $WRF_DIR/run/* .
+			#rm *.exe
+			#rm namelist.input
 			ln -sf $WRF_DIR/main/*.exe .
 			
 			cp $root_dir"/namelists/run_$run"* namelist.input
@@ -47,9 +48,9 @@ i=0
 			cp $root_dir/tslist .
 			cp $root_dir/myoutfields.txt .
 			
-			cp $root_dir/submit_wrf_turbulence.sh .
+			#cp $root_dir/submit_wrf_turbulence.sh .
 			#cp $root_dir/submit_real_wrf_delftblue.sh .
-			sbatch submit_wrf_turbulence.sh
+			#sbatch submit_wrf_turbulence.sh
 			#sbatch submit_real_wrf_delftblue.sh
 		cd $root_dir
 	done
