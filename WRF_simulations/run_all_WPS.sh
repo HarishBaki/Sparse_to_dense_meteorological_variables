@@ -1,4 +1,4 @@
-WPS_source_dir=/media/sukanta/HD2/WRF/WRFV4.4/WPS # this is the WPS installation directory
+WPS_source_dir=$WPS_DIR # this is the WPS installation directory
 
 root_dir=$(pwd)
 
