@@ -4,7 +4,8 @@ root_dir=$(pwd)
 cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actual simulation case names
 start_dates=('2023-02-02_12:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
 end_dates=('2023-02-04_00:00:00' '2023-03-26_12:00:00' '2023-04-02_12:00:00' '2023-12-18_18:00:00')
-for ((i=1;i<${#cases[@]};++i)); do
+#for ((i=1;i<${#cases[@]};++i)); do
+i=0
 	case=${cases[$i]}
 	start_date=$(echo "${start_dates[$i]}" | sed 's/_/ /')
 	end_date=$(echo "${end_dates[$i]}" | sed 's/_/ /')
@@ -19,12 +20,12 @@ for ((i=1;i<${#cases[@]};++i)); do
 	end_hour=$(date -ud "$end_date" +"%H")
 
 	# call WRF pipeline here
-	for run in $(seq 1 1); do
+	for run in $(seq 2 6); do
 		run_dir=$case/WRF_run_$run
 
 		mkdir -p $run_dir
 		cd $run_dir
-			metgrid_dir=$root_dir/$case/$"WPS_run_"$run/metfiles
+			metgrid_dir=$root_dir/$case/WPS_run_1/metfiles
 			# link metfiles
 			ln -sf $metgrid_dir/* .
 			
@@ -52,4 +53,4 @@ for ((i=1;i<${#cases[@]};++i)); do
 			#sbatch submit_real_wrf_delftblue.sh
 		cd $root_dir
 	done
-done
+#done

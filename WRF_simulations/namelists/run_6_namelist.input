@@ -1,0 +1,166 @@
+ &time_control
+ start_year = 
+ start_month = 
+ start_day = 
+ start_hour = 
+ start_minute                        = 00,   00,   00,   00,
+ start_second                        = 00,   00,   00,   00,
+ end_year = 
+ end_month = 
+ end_day = 
+ end_hour = 
+ end_minute                          = 00,   00,   00,   00,
+ end_second                          = 00,   00,   00,   00,
+ interval_seconds                    = 3600
+ input_from_file                     = .true.,.true.,.true.,.true.,
+ history_interval                    = 360,   5,   5,  10,
+ frames_per_outfile                  = 1000, 1000, 1000, 1,
+ restart                             = .false.,
+ restart_interval                    = 50000,
+ io_form_history                     = 2
+ io_form_restart                     = 2
+ io_form_input                       = 2
+ io_form_boundary                    = 2
+ debug_level                         = 50
+ 
+ !For SST updating (used only with sst_update=1):
+ auxinput4_inname                    = "wrflowinp_d<domain>"
+ auxinput4_interval                  = 360, 360, 360, 360,
+ io_form_auxinput4                   = 2,
+ 
+ ! Save outputs at z_levels  
+ auxhist22_interval 				 = 360,5,5,5, !corresponds to the heightlevel diagnostics, in minutes
+ frames_per_auxhist22 				 = 10000,10000,10000,10000,
+ io_form_auxhist22 					 = 2
+ iofields_filename                   = "myoutfields.txt","myoutfields.txt","myoutfields.txt","myoutfields.txt",
+ ignore_iofields_warning             = .true.,
+ /
+
+ &domains
+ time_step                           = 30,
+ time_step_fract_num                 = 0,
+ time_step_fract_den                 = 1,
+ use_adaptive_time_step              = .true.,
+ step_to_output_time                 = .true.,
+ target_cfl                          = 0.8,0.8,0.8,
+ starting_time_step                  = 54,18,6,
+ max_time_step                       = 90,40,20,
+ min_time_step                       = -1,-1,-1,
+ max_dom                             = 2,
+ e_we                                = 194,	367,	811,
+ e_sn                                = 184,	337,	721,
+ e_vert                              = 51,    51,    51,    51,
+ p_top_requested                     = 10000,
+ num_metgrid_levels                  = 38,
+ num_metgrid_soil_levels             = 4,
+ dx                                  = 9000,   3000,  1000,
+ dy                                  = 9000,   3000,  1000,
+ grid_id                             = 1,     2,     3,    4,
+ parent_id                           = 1,     1,     2,    3,
+ i_parent_start                      = 1,    36,    48,   90,
+ j_parent_start                      = 1,    36,    48,   15,
+ parent_grid_ratio                   = 1,     3,     3,    3,
+ parent_time_step_ratio              = 1,     2,     3,    3,
+ feedback                            = 0,
+ smooth_option                       = 0,
+ max_ts_level                        = 51,
+ max_ts_locs                         = 126,
+ eta_levels =   1.0000, 0.9980, 0.9955, 0.9925, 0.9890, 0.9850,
+                0.9805, 0.9755, 0.9700, 0.9640, 0.9575, 0.9505,
+                0.9430, 0.9350, 0.9265, 0.9170, 0.9060, 0.8930,
+                0.8775, 0.8590, 0.8363, 0.8104, 0.7803, 0.7456,
+                0.7059, 0.6615, 0.6126, 0.5594, 0.5041, 0.4479,
+                0.3919, 0.3384, 0.2897, 0.2474, 0.2107, 0.1792,
+                0.1523, 0.1293, 0.1093, 0.0917, 0.0763, 0.0629,
+                0.0513, 0.0413, 0.0328, 0.0255, 0.0194, 0.0144,
+                0.0104, 0.0071, 0.0000,
+ /
+
+ &physics
+ mp_physics                          = 16,    16,     4,     4,    
+ ra_lw_physics                       = 4,    4,     4,     4,   
+ ra_sw_physics                       = 4,    4,     4,     4, 
+ radt                                = 9,    3,     1,     1,
+ sf_sfclay_physics                   = 5,    5,     5,     5,   
+ sf_surface_physics                  = 2,    2,     2,     2,   
+ bl_pbl_physics                      = 2,    2,     5,     5,
+ bl_mynn_tkebudget                   = 1,    1,     1,
+ bl_mynn_tkeadvect                   = .true., .true., .true.,  
+ mfshconv                            = 0,    0,     0,     0,
+ bldt                                = 0,    0,     0,     0,
+ cu_physics                          = 1,    1,     0,     0,
+ cudt                                = 5,    5,     5,     5,
+ isfflx                              = 1,
+ ifsnow                              = 0,
+ icloud                              = 1,
+ surface_input_source                = 1,
+ num_soil_layers                     = 4,
+ sf_urban_physics                    = 0,     
+ maxiens                             = 1,
+ maxens                              = 3,
+ maxens2                             = 3,
+ maxens3                             = 16,
+ ensdim                              = 144,
+ windfarm_opt                        = 0, 0, 0, 1,
+ sst_update                          = 1,
+ do_radar_ref                        = 1,
+ /
+
+ &fdda
+ grid_fdda                           = 1, 1, 1, 1, 
+ gfdda_inname                        = "wrffdda_d<domain>"
+ gfdda_interval_m                    = 360, 360, 360, 360, 
+ gfdda_end_h                         = 336, 336, 336, 336, 
+ io_form_gfdda                       = 2,
+ fgdt                                = 0, 0, 0, 0,
+ if_zfac_uv                          = 1, 1, 1, 1, 
+ if_zfac_t                           = 1, 1, 1, 1,
+ if_zfac_q                           = 1, 1, 1, 1,    
+ k_zfac_uv                           = 23, 23, 23, 23,
+ k_zfac_t                            = 23, 23, 23, 23,
+ k_zfac_q                            = 23, 23, 23, 23,
+ guv                                 = 0.0003, 0.0003, 0.0003, 0.0003,
+ gt                                  = 0.0003, 0.0003, 0.0003, 0.0003,
+ gq                                  = 0.0003, 0.0003, 0.0003, 0.0003, 
+ if_ramping                          = 0,
+ dtramp_min                          = 60.0, 
+ /
+
+ &dynamics
+ w_damping                           = 0,
+ diff_opt                            = 1,      1,      1,      1,
+ km_opt                              = 4,      4,      4,      4,
+ diff_6th_opt                        = 0,      0,      0,      0,
+ diff_6th_factor                     = 0.12,   0.12,   0.12,   0.12,
+ base_temp                           = 290.
+ damp_opt                            = 0,
+ zdamp                               = 5000.,  5000.,  5000.,  5000.,
+ dampcoef                            = 0.2,    0.2,    0.2,    0.2,
+ khdif                               = 0,      0,      0,      0,
+ kvdif                               = 0,      0,      0,      0,
+ non_hydrostatic                     = .true., .true., .true., .true.,
+ moist_adv_opt                       = 1,      1,      1,      1,     
+ scalar_adv_opt                      = 1,      1,      1,      1,      
+ /
+
+ &bdy_control
+ spec_bdy_width                      = 5,
+ spec_zone                           = 1,
+ relax_zone                          = 4,
+ specified                           = .true., .false.,.false.,.false.,
+ nested                              = .false., .true., .true.,.true.,
+ /
+
+ &grib2
+ /
+
+ &namelist_quilt
+ nio_tasks_per_group = 0,
+ nio_groups = 1,
+ /
+ 
+ &diags
+ z_lev_diags = 1,	!vertically interpolates U, V, T, dew point T, RH, and geopotential height, added by Harish 15-04-2024
+ num_z_levels = 23, 
+ z_levels = 2,4, 10, 30, 40, 60, 80, 100, 120, 140,160, 180, 200, 240, 300, 400, 500, 600, 700, 800, 900, 1000, 1100,  
+ /

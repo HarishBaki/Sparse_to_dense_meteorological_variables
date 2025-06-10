@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=wrf
-#SBATCH --ntasks=12
+#SBATCH --ntasks=9
 #SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=2000
 
