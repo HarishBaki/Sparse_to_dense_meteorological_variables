@@ -84,7 +84,7 @@
  sf_sfclay_physics                   = 1,    1,     5,     5,   
  sf_surface_physics                  = 2,    2,     2,     2,   
  bl_pbl_physics                      = 1,    1,     5,     5,
- bl_mynn_tkebudget                   = 1,    1,     1,
+ !bl_mynn_tkebudget                   = 1,    1,     1,
  bl_mynn_tkeadvect                   = .true., .true., .true.,  
  mfshconv                            = 0,    0,     0,     0,
  bldt                                = 0,    0,     0,     0,
