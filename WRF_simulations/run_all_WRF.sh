@@ -48,9 +48,9 @@ i=0
 			cp $root_dir/tslist .
 			cp $root_dir/myoutfields.txt .
 			
-			#cp $root_dir/submit_wrf_turbulence.sh .
+			cp $root_dir/submit_wrf_turbulence.sh .
 			#cp $root_dir/submit_real_wrf_delftblue.sh .
-			#sbatch submit_wrf_turbulence.sh
+			sbatch submit_wrf_turbulence.sh
 			#sbatch submit_real_wrf_delftblue.sh
 		cd $root_dir
 	done
