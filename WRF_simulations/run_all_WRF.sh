@@ -2,7 +2,7 @@ root_dir=$(pwd)
 
 # Define simulation metadata
 cases=('case_1' 'case_2' 'case_3' 'case_4')  # <-- Define this as per your actual simulation case names
-start_dates=('2023-02-02_12:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
+start_dates=('2023-02-02_18:00:00' '2023-03-25_00:00:00' '2023-04-01_00:00:00' '2023-12-17_06:00:00')
 end_dates=('2023-02-04_00:00:00' '2023-03-26_12:00:00' '2023-04-02_12:00:00' '2023-12-18_18:00:00')
 #for ((i=1;i<${#cases[@]};++i)); do
 i=0
@@ -20,7 +20,7 @@ i=0
 	end_hour=$(date -ud "$end_date" +"%H")
 
 	# call WRF pipeline here
-	for run in $(seq 2 2); do
+	for run in $(seq 4 5); do
 		run_dir=$case/WRF_run_$run
 
 		mkdir -p $run_dir
