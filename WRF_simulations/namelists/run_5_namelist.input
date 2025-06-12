@@ -13,7 +13,7 @@
  end_second                          = 00,   00,   00,   00,
  interval_seconds                    = 3600
  input_from_file                     = .true.,.true.,.true.,.true.,
- history_interval                    = 360,   5,   5,  10,
+ history_interval                    = 360,   360,   5,  10,
  frames_per_outfile                  = 1000, 1000, 1000, 1,
  restart                             = .false.,
  restart_interval                    = 50000,
@@ -29,7 +29,7 @@
  io_form_auxinput4                   = 2,
  
  ! Save outputs at z_levels  
- auxhist22_interval 				 = 360,5,5,5, !corresponds to the heightlevel diagnostics, in minutes
+ auxhist22_interval 				 = 360,360,5,5, !corresponds to the heightlevel diagnostics, in minutes
  frames_per_auxhist22 				 = 10000,10000,10000,10000,
  io_form_auxhist22 					 = 2
  iofields_filename                   = "myoutfields.txt","myoutfields.txt","myoutfields.txt","myoutfields.txt",
