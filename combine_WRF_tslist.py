@@ -14,7 +14,7 @@ from scipy.spatial import cKDTree
 # %%
 # Get the WRF simulation duration
 cases=['case_1','case_2','case_3','case_4']  # <-- Define this as per your actual simulation case names
-start_dates=['2023-02-02T12:00:00', '2023-03-25T00:00:00', '2023-04-01T00:00:00', '2023-12-17T06:00:00']
+start_dates=['2023-02-02T18:00:00', '2023-03-25T06:00:00', '2023-04-01T06:00:00', '2023-12-17T12:00:00']
 end_dates=['2023-02-04T00:00:00', '2023-03-26T12:00:00', '2023-04-02T12:00:00', '2023-12-18T18:00:00']
 
 """
@@ -34,7 +34,7 @@ def process_tslist(case, run, start_date, end_date):
     start_ts = pd.to_datetime(start_date)
     end_ts = pd.to_datetime(end_date)
     time_index = pd.date_range(start=start_ts, end=end_ts,freq='5min')
-    time_index = time_index[time_index >= start_ts + pd.Timedelta(hours=12)]    #Here, if the start and end dates are old, then keep 12. If you change to new dates, update with 6
+    time_index = time_index[time_index >= start_ts + pd.Timedelta(hours=6)]    #Here, if the start and end dates are old, then keep 12. If you change to new dates, update with 6
     print(time_index)
 
     # Store si10 values for each station
@@ -112,8 +112,10 @@ def process_tslist(case, run, start_date, end_date):
         unlimited_dims='time'
     )
 # %%
-#for case, run, start_date, end_date in zip(cases[1:], start_dates[1:], end_dates[1:]):
-case=0
-run=4
-process_tslist(cases[case], run, start_dates[case], end_dates[case])
+for case in [1,2,3]:
+    for run in [2,4,5]:
+        print(f"Processing {case} run {run}")
+        #case=0
+        #run=4
+        process_tslist(cases[case], run, start_dates[case], end_dates[case])
 # %%
