@@ -10,13 +10,14 @@ for weights_seed in "${weights_seeds[@]}"; do
     for data_type in "${data_types[@]}"; do
         for model in "${models[@]}"; do
             for orography_as_channel in "${orography_as_channels[@]}"; do
-                export variable data_type model orography_as_channel weights_seed
-                echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel with weights_seed: $weights_seed"
+                additional_input_variables='none'
+                export variable data_type model orography_as_channel weights_seed additional_input_variables
+                echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel with weights_seed: $weights_seed and additional_input_variables: $additional_input_variables"
                 sbatch --export=All jobsub_metrics.slurm
             done
             orography_as_channel='true'
             for additional_input_variables in "${additional_input_variabless[@]}"; do
-                export variable data_type model orography_as_channel additional_input_variables weights_seed
+                export variable data_type model orography_as_channel additional_input_variables weights_seed 
                 echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel, additional_input_variables: $additional_input_variables with weights_seed: $weights_seed"
                 sbatch --export=All jobsub_metrics.slurm
             done
