@@ -34,21 +34,22 @@ def is_interactive():
     return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
 
 if is_interactive() or len(sys.argv) == 1:
-    sys.argv = ["", "si10", "50", "w"]
+    sys.argv = ["", "si10",43, "50", "w"]
 var_name = sys.argv[1]
-n_stations = int_or_none(sys.argv[2])
-mode = sys.argv[3]
+stations_seed = int(sys.argv[2])
+n_stations = int_or_none(sys.argv[3])
+mode = sys.argv[4]
 
-stations_seed = 42
+# %%
 dates = pd.date_range(start='2023-01-01T00', end='2023-12-31T23', freq='h')
 yyyymmdd = pd.Series(dates.year*10000 + dates.month*100 + dates.day).unique()
 data_dir = 'data' #'/data/harish/Sparse_to_dense_meteorological_variables'
 source_zarr_store = f'{data_dir}/RTMA.zarr'
 
 if n_stations is not None:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-random-stations/RTMA_test.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-inference-stations/RTMA_test.zarr"
 else:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/all-stations/RTMA_test.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/all-stations/RTMA_test.zarr"
 os.makedirs(target_zarr_store, exist_ok=True)
 
 # %%
