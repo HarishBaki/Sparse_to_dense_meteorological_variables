@@ -131,7 +131,7 @@ interp.where(mask,0).plot()
 
 # %%
 chunk_size = 24
-n_jobs = 120  # 2 threads per chunk, parallel across 60 chunks
+n_jobs = 60  # 2 threads per chunk, parallel across 60 chunks
 ds = xr.open_zarr(source_zarr_store, chunks={'time': chunk_size})[var_name].sel(time=dates)
 
 # Initialize the Zarr store
