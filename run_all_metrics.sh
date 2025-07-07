@@ -4,10 +4,14 @@ data_types=("RTMA" "NYSM")
 
 # Metrics from Barnes
 n_inference_stationss=("none" "50" "75" "100")
-inference_stations_seeds=(42 43 44 45 46) # Different seeds for inference stations
 for data_type in "${data_types[@]}"; do
-    for inference_stations_seed in "${inference_stations_seeds[@]}"; do
-        for n_inference_stations in "${n_inference_stationss[@]}"; do
+    for n_inference_stations in "${n_inference_stationss[@]}"; do
+        if [[ "$n_inference_stations" == "none" ]]; then
+            inference_stations_seeds=("42") # Only one seed for 'none' case
+        else
+            inference_stations_seeds=(42 43 44 45 46) # Different seeds for inference stations
+        fi
+        for inference_stations_seed in "${inference_stations_seeds[@]}"; do
             export variable data_type inference_stations_seed n_inference_stations
             export -p | grep -E 'variable|data_type|inference_stations_seed|n_inference_stations'
             echo "Running for variable: $variable, data_type: $data_type, inference_stations_seed: $inference_stations_seed, n_inference_stations: $n_inference_stations"
