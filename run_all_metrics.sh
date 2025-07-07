@@ -1,29 +1,45 @@
 #!/bin/bash
-
 variable='i10fg'
-data_types=("RTMA")
-models=("DCNN" "UNet" "SwinT2UNet")
-orography_as_channels=("false" "true")
-additional_input_variabless=("si10" "si10,t2m" "si10,t2m,sh2")
-weights_seeds=("43" "44" "45" "46")
-for weights_seed in "${weights_seeds[@]}"; do
-    for data_type in "${data_types[@]}"; do
-        for model in "${models[@]}"; do
-            for orography_as_channel in "${orography_as_channels[@]}"; do
-                additional_input_variables='none'
-                export variable data_type model orography_as_channel weights_seed additional_input_variables
-                echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel with weights_seed: $weights_seed and additional_input_variables: $additional_input_variables"
-                sbatch --export=All jobsub_metrics.slurm
-            done
-            orography_as_channel='true'
-            for additional_input_variables in "${additional_input_variabless[@]}"; do
-                export variable data_type model orography_as_channel additional_input_variables weights_seed 
-                echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel, additional_input_variables: $additional_input_variables with weights_seed: $weights_seed"
-                sbatch --export=All jobsub_metrics.slurm
-            done
+data_types=("RTMA" "NYSM")
+
+# Metrics from Barnes
+n_inference_stationss=("none" "50" "75" "100")
+inference_stations_seeds=(42 43 44 45 46) # Different seeds for inference stations
+for data_type in "${data_types[@]}"; do
+    for inference_stations_seed in "${inference_stations_seeds[@]}"; do
+        for n_inference_stations in "${n_inference_stationss[@]}"; do
+            export variable data_type inference_stations_seed n_inference_stations
+            export -p | grep -E 'variable|data_type|inference_stations_seed|n_inference_stations'
+            echo "Running for variable: $variable, data_type: $data_type, inference_stations_seed: $inference_stations_seed, n_inference_stations: $n_inference_stations"
+            sbatch --export=All jobsub_metrics_Barnes.slurm
         done
     done
 done
+
+if false; then
+    models=("DCNN" "UNet" "SwinT2UNet")
+    orography_as_channels=("false" "true")
+    additional_input_variabless=("si10" "si10,t2m" "si10,t2m,sh2")
+    weights_seeds=("43" "44" "45" "46")
+    for weights_seed in "${weights_seeds[@]}"; do
+        for data_type in "${data_types[@]}"; do
+            for model in "${models[@]}"; do
+                for orography_as_channel in "${orography_as_channels[@]}"; do
+                    additional_input_variables='none'
+                    export variable data_type model orography_as_channel weights_seed additional_input_variables
+                    echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel with weights_seed: $weights_seed and additional_input_variables: $additional_input_variables"
+                    sbatch --export=All jobsub_metrics.slurm
+                done
+                orography_as_channel='true'
+                for additional_input_variables in "${additional_input_variabless[@]}"; do
+                    export variable data_type model orography_as_channel additional_input_variables weights_seed 
+                    echo "Running for variable $variable, data_type: $data_type, model: $model, orography_as_channel: $orography_as_channel, additional_input_variables: $additional_input_variables with weights_seed: $weights_seed"
+                    sbatch --export=All jobsub_metrics.slurm
+                done
+            done
+        done
+    done
+fi
 
 if false; then
     train_years_ranges=("2018" "2018,2019" "2018,2020")
@@ -46,8 +62,8 @@ if false; then
     orography_as_channel='true'
     additional_input_variables='si10,t2m,sh2'
     n_random_stationss=("none" "50" "75" "100")
-    n_inference_stationss=("50" "75" "100")
-    randomize_stations_persamples=("true" "false")
+    n_inference_stationss=("none" "50" "75" "100")
+    randomize_stations_persamples=("true")
     inference_stations_seeds=(43 44 45 46) # Different seeds for inference stations
     for data_type in "${data_types[@]}"; do
         for inference_stations_seed in "${inference_stations_seeds[@]}"; do
