@@ -1,0 +1,1 @@
+for seed in {42..51}; do for i in {0..3}; do python Barnes_extremes_ensemble.py $seed $i; done; done
