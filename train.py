@@ -52,6 +52,9 @@ def run_epochs(model, train_dataloader, val_dataloader, optimizer, criterion, me
     for epoch in range(start_epoch, num_epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
+        
+        if hasattr(train_dataloader.dataset, "set_epoch"):
+            train_dataloader.dataset.set_epoch(epoch)
 
         # === Training ===
         model.train()

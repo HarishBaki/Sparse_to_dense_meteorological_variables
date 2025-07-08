@@ -107,6 +107,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.stations_seed = stations_seed
         self.randomize_stations_persample = randomize_stations_persample
         self.n_random_stations = n_random_stations
+        self.epoch = 0  # default epoch is 0, can be used to change the random seed for each epoch.
 
         if not self.randomize_stations_persample:   # if False
             # Check for the n_random_stations
@@ -143,6 +144,9 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
     def __len__(self):
         return len(self.valid_indices)
 
+    def set_epoch(self, epoch):
+        self.epoch = epoch 
+
     def __getitem__(self, idx):
         real_idx = self.valid_indices[idx]
         target = self.ds[self.input_variables_in_order[0]].isel(time=real_idx)    # an xarray DataArray, shape: [ y, x]. Can access the values directly.
@@ -157,7 +161,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             # Randomly select n_random_stations from the NYSM stations.
             # The key is, the n_random_stations is a random number for each sample. 
             # Using that random number, we will select the random stations from the NYSM stations.
-            rng = np.random.default_rng(self.stations_seed + real_idx)
+            rng = np.random.default_rng(self.stations_seed + real_idx + self.epoch * len(self.valid_indices))
             perm = rng.permutation(len(self.nysm_latlon))
             if self.n_random_stations is None:  # if the n_random_stations is None, then a random number is selected. Else, it is a fixed number for each idx.
                 n_random_stations = rng.integers(50, len(self.nysm_latlon) + 1)
