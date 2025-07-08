@@ -46,15 +46,15 @@ if __name__ == "__main__":
             "--additional_input_variables", "si10,t2m,sh2",
             "--train_years_range", "2018,2021",
             "--stations_seed", "42",
-            "--n_random_stations", "50",
+            "--n_random_stations", "none",
             "--randomize_stations_persample", "false",
             "--loss", "MaskedCharbonnierLoss",
             "--transform", "standard",
             "--weights_seed", "42",
             "--activation_layer", "gelu",
-            "--inference_stations_seed", "43",
-            "--n_inference_stations", "50", 
-            "--data_type","RTMA",
+            "--inference_stations_seed", "42",
+            "--n_inference_stations", "none", 
+            "--data_type","NYSM",
         ]
         print("DEBUG: Using injected args:", sys.argv)
 
@@ -264,7 +264,7 @@ if __name__ == "__main__":
         else:
             test_ds = test_ds.resample(time='1h').nearest()
             NYSM_var_data = NYSM[variable].resample(time='1h').nearest()
-        missing_mask = NYSM_var_data.T.isnull().values  # shape [T, N_stations]
+        missing_mask = NYSM_var_data.T.isnull().values  # shape [T, N_stations], this is crucial to make sure since the trianing process excludes the missing stations
         station_mask = np.zeros((T, 1, H, W), dtype=np.uint8)
         for s in range(len(y_indices)):
             y, x = y_indices[s], x_indices[s]

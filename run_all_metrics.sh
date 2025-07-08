@@ -1,15 +1,15 @@
 #!/bin/bash
 variable='i10fg'
-data_types=("RTMA" "NYSM")
+data_types=("NYSM")
 
 # Metrics from Barnes
-n_inference_stationss=("none" "50" "75" "100")
+n_inference_stationss=("50" "75" "100")
 for data_type in "${data_types[@]}"; do
     for n_inference_stations in "${n_inference_stationss[@]}"; do
         if [[ "$n_inference_stations" == "none" ]]; then
             inference_stations_seeds=("42") # Only one seed for 'none' case
         else
-            inference_stations_seeds=(42 43 44 45 46) # Different seeds for inference stations
+            inference_stations_seeds=(43 44 45 46) # Different seeds for inference stations
         fi
         for inference_stations_seed in "${inference_stations_seeds[@]}"; do
             export variable data_type inference_stations_seed n_inference_stations
