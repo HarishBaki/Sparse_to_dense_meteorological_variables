@@ -363,13 +363,14 @@ class NYSM_sparse_to_dense_Dataset(Dataset):
 
 # %%
 if __name__ == "__main__":
+    # %%
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     # Everything here only runs when you execute this file directly
-    orography = xr.open_dataset('orography.nc').orog
+    orography = xr.open_dataset('orography.nc')
     RTMA_lat = orography.latitude.values
     RTMA_lon = orography.longitude.values
-    orography = orography.values
+    orography = orography.orog.values
 
     mask = xr.open_dataset('mask_2d.nc').mask
     # Load NYSM station data
