@@ -77,7 +77,7 @@ echo "----------------------------------------"
 # Install required Python packages inside the container
 pip install --quiet timm torchmetrics seaborn
 
-torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT RTMA_inference.py \
+torchrun --nproc_per_node=$nproc_per_node --master_port=$MASTER_PORT NYSM_inference.py \
 --checkpoint_dir $checkpoint_dir \
 --variable $variable \
 --model $model \

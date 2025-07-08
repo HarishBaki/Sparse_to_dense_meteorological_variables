@@ -14,6 +14,7 @@ import os, sys, time, glob, re
 from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
 from metpy.interpolate import interpolate_to_points
+from util import str_or_none, int_or_none
 
 '''
 var_name: the variable name inside each individual files. 
@@ -26,44 +27,52 @@ wdir10 for wind direction
 si10 for wind speed
 '''
 
-def int_or_none(v):
-    return None if v.lower() == 'none' else int(v)
-
 def is_interactive():
     import __main__ as main
     return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
 
 if is_interactive() or len(sys.argv) == 1:
-    sys.argv = ["", "i10fg", "50", "w"]
+    sys.argv = ["", "i10fg", 42, "none", "w"]
 var_name = sys.argv[1]
-n_stations = int_or_none(sys.argv[2])
-mode = sys.argv[3]
+stations_seed = int(sys.argv[2])
+n_stations = int_or_none(sys.argv[3])
+mode = sys.argv[4]
 
-stations_seed = 42
-dates = pd.date_range(start='2023-01-01T00', end='2023-12-31T23', freq='h')
+freq = 5 # Frequency of the data in minutes
+dates = pd.date_range(start='2023-01-01T00:00', end='2023-12-31T23:59', freq=f'{freq}min')
+chunk_size = 24 * 60 // freq  # 24 hours in minutes divided by frequency
 yyyymmdd = pd.Series(dates.year*10000 + dates.month*100 + dates.day).unique()
 data_dir = 'data' #'/data/harish/Sparse_to_dense_meteorological_variables'
-source_zarr_store = f'{data_dir}/RTMA.zarr'
 
 if n_stations is not None:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-random-stations/NYSM_test.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-inference-stations/NYSM_test.zarr"
 else:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/all-stations/NYSM_test.zarr"
+    target_zarr_store = f"{data_dir}/Barnes_interpolated/all-stations/NYSM_test.zarr"
 os.makedirs(target_zarr_store, exist_ok=True)
 
 # %%
-def init_zarr_store(zarr_store, dates,var_name,mode):
+def init_zarr_store(zarr_store, dates, variable, mode, chunk_size=24):
     orography = xr.open_dataset('orography.nc')
     orography.attrs = {}
-    template = xr.full_like(orography.orog.expand_dims(time=dates),fill_value=np.nan,dtype='float32')
-    template['time'] = dates
-    template = template.chunk({'time': 24})
-    template = template.transpose('time','y','x')
-    template = template.assign_coords({
-        'latitude': orography.latitude,
-        'longitude': orography.longitude
-    })
-    template.to_dataset(name = var_name).to_zarr(zarr_store, compute=False, mode=mode)
+    shape = (len(dates),) + orography.orog.shape  # (time, y, x)
+
+    # Create a lazy Dask array filled with NaNs
+    data = da.full(shape, np.nan, chunks=(chunk_size, -1, -1), dtype='float32')
+
+    template = xr.DataArray(
+        data,
+        dims=('time', 'y', 'x'),
+        coords={
+            'time': dates,
+            'latitude': orography.latitude,
+            'longitude': orography.longitude
+        },
+        name=variable,
+        attrs={}
+    )
+
+    ds = template.to_dataset()
+    ds.to_zarr(zarr_store,compute=False ,mode=mode)
 
 # %%
 # === Loading some topography and masking data ===
@@ -100,7 +109,7 @@ tree = cKDTree(station_points)
 # Query the station locations
 _, station_indices = tree.query(nysm_latlon)
 NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-NYSM = NYSM.resample(time='1h').nearest()
+NYSM = NYSM.resample(time=f'{freq}min').nearest()
 # %%
 # Check for the n_random_stations
 if n_stations is not None:
@@ -151,12 +160,11 @@ interp.where(mask,0).plot()
 '''
 
 # %%
-chunk_size = 24
 n_jobs = 120  # 2 threads per chunk, parallel across 60 chunks
 ds = NYSM[var_name].sel(time=dates)
 
 # Initialize the Zarr store
-init_zarr_store(target_zarr_store, dates, var_name, mode)
+init_zarr_store(target_zarr_store, dates, var_name, mode, chunk_size=chunk_size)
 
 # Open Zarr for writing
 zarr_write = zarr.open(target_zarr_store, mode='a')
@@ -200,3 +208,5 @@ results = Parallel(n_jobs=n_jobs)(
 # Optional: print summary
 total_success = sum(results)
 print(f"Interpolation completed: {total_success}/{len(ds.time)} time steps written.")
+
+# %%

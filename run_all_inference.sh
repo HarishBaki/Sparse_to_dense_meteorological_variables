@@ -48,23 +48,25 @@ if false; then
     done
 fi
 
-losses=("MaskedMSELoss" "MaskedCombinedMAEQuantileLoss")
-n_inference_stationss=("50" "75" "100" "none")
-for loss in "${losses[@]}"; do
-    for n_inference_stations in "${n_inference_stationss[@]}"; do
-        n_random_stations='none'  # Set to 'none' for inference
-        randomize_stations_persample='false'  # Set to 'true' for inference
-        export n_random_stations randomize_stations_persample n_inference_stations loss
-        sbatch --export=All jobsub_inference.slurm
+if false; then
+    losses=("MaskedMSELoss" "MaskedCombinedMAEQuantileLoss")
+    n_inference_stationss=("50" "75" "100" "none")
+    for loss in "${losses[@]}"; do
+        for n_inference_stations in "${n_inference_stationss[@]}"; do
+            n_random_stations='none'  # Set to 'none' for inference
+            randomize_stations_persample='false'  # Set to 'true' for inference
+            export n_random_stations randomize_stations_persample n_inference_stations loss
+            sbatch --export=All jobsub_inference.slurm
 
-        n_random_stations='none'
-        randomize_stations_persample='true'  # Set to 'true' for inference
-        export n_random_stations randomize_stations_persample n_inference_stations loss
-        sbatch --export=All jobsub_inference.slurm
+            n_random_stations='none'
+            randomize_stations_persample='true'  # Set to 'true' for inference
+            export n_random_stations randomize_stations_persample n_inference_stations loss
+            sbatch --export=All jobsub_inference.slurm
 
-        n_random_stations='75'  # 
-        randomize_stations_persample='true'  # Set to 'true' for inference
-        export n_random_stations randomize_stations_persample n_inference_stations loss
-        sbatch --export=All jobsub_inference.slurm
+            n_random_stations='75'  # 
+            randomize_stations_persample='true'  # Set to 'true' for inference
+            export n_random_stations randomize_stations_persample n_inference_stations loss
+            sbatch --export=All jobsub_inference.slurm
+        done
     done
-done
+fi
