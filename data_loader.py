@@ -67,7 +67,8 @@ class Transform:
 class RTMA_sparse_to_dense_Dataset(Dataset):
     def __init__(self, zarr_store,input_variables_in_order,orography_as_channel, dates_range, orography, 
                  RTMA_lat, RTMA_lon, nysm_latlon, y_indices, 
-                 x_indices,mask,missing_times,input_transform=None,target_transform=None, n_random_stations=None,stations_seed=42,randomize_stations_persample=False):
+                 x_indices,mask,missing_times,input_transform=None,target_transform=None, 
+                 n_random_stations=None,stations_seed=42,randomize_stations_persample=False,exclude_indices = [65, 102]):
         '''
         Custom dataset class for loading RTMA data.
         This dataset is designed to work with the RTMA data stored in Zarr format.
@@ -89,6 +90,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         - n_random_stations (int, optional): Number of random stations to select from the NYSM stations.
         - stations_seed (int, optional): Seed for random number generation.
         - randomize_stations_persample (bool): If True, then the n_random_stations is a random number for each sample.
+        - exclude_indices (list): List of indices to exclude from the NYSM stations, that fall outside the NYS mask region.
         Returns:
         - input_tensor (Tensor): Input tensor containing interpolated station values, orography, and station locations mask. shape [batch, 3, y, x]
         - target_tensor (Tensor): Target tensor containing the RTMA data. shape [batch, y, x]
@@ -107,6 +109,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
         self.stations_seed = stations_seed
         self.randomize_stations_persample = randomize_stations_persample
         self.n_random_stations = n_random_stations
+        self.exclude_indices = exclude_indices  # indices of the NYSM stations to exclude, that fall outside the NYS mask region.
         self.epoch = 0  # default epoch is 0, can be used to change the random seed for each epoch.
 
         if not self.randomize_stations_persample:   # if False
@@ -115,6 +118,8 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
                 # Randomly select n_random_stations from the NYSM stations
                 rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
                 perm = rng.permutation(len(nysm_latlon))
+                # At this stage, exclude the exclude_indices from the permutation
+                perm = perm[~np.isin(perm, self.exclude_indices)]
                 #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
                 random_indices = perm[:self.n_random_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
                 # Update the y_indices and x_indices to the random stations
@@ -163,6 +168,8 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             # Using that random number, we will select the random stations from the NYSM stations.
             rng = np.random.default_rng(self.stations_seed + real_idx + self.epoch * len(self.valid_indices))
             perm = rng.permutation(len(self.nysm_latlon))
+            # At this stage, exclude the exclude_indices from the permutation
+            perm = perm[~np.isin(perm, self.exclude_indices)]
             if self.n_random_stations is None:  # if the n_random_stations is None, then a random number is selected. Else, it is a fixed number for each idx.
                 n_random_stations = rng.integers(50, len(self.nysm_latlon) + 1)
             random_indices = perm[:n_random_stations]        
@@ -189,7 +196,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             inputs_interp.append(interp)
         # Stack the interpolated inputs
         interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
-        
+        print('NYSM stations',nysm_latlon)
         if self.orography_as_channel:
             # Combine inputs: interpolated + orography + station mask
             input_tensor = np.concatenate([interp, self.orography,station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
