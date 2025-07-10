@@ -11,7 +11,8 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --exclude=dgx02
 # #SBATCH --container-image='docker://nvcr.io/nvidia/physicsnemo/physicsnemo:25.03'
-#SBATCH --container-image='/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh'
+# #SBATCH --container-image='/network/rit/dgx/dgx_basulab/enroot_tmp/physicsnemo:25.03.sqsh'
+#SBATCH --container-name=physicsnemo
 #SBATCH --container-mounts=/network/rit/dgx/dgx_basulab/Harish:/mnt/dgx_basulab/Harish,/network/rit/lab/basulab/Harish:/mnt/basulab/Harish,/network/rit/home/hb533188:/mnt/home/hb533188,/network/rit/dgx/dgx_basulab/Harish/Sparse_to_dense_meteorological_variables:/mnt/current_project
 #SBATCH --container-workdir=/mnt/current_project
 # #SBATCH --container-image=/home/harish/softwares/container_images/physicsnemo:25.03.sqsh
@@ -24,17 +25,17 @@ export num_workers=${SLURM_CPUS_PER_TASK}
 export MASTER_PORT=$((20000 + RANDOM % 20000))
 
 # Call the actual training script
-nproc_per_node=${nproc_per_node:-4}
+nproc_per_node=${nproc_per_node:-2}
 num_workers=${num_workers:-32}
-checkpoint_dir=${checkpoint_dir:-'checkpoints'}
+checkpoint_dir=${checkpoint_dir:-'checkpoints_'}
 variable=${variable:-'i10fg'}    #'i10fg','si10','t2m','sh2'
 model=${model:-'UNet'} #  'UNet' 'DCNN', 'SwinT2UNet'
 orography_as_channel=${orography_as_channel:-'true'}  # 'True' or 'False'
 additional_input_variables=${additional_input_variables:-'si10,t2m,sh2'} # 'si10,t2m,sh2' or 'none'
 train_years_range=${train_years_range:-'2018,2021'}   # comma-seperated list of first and last years. Pass only one year if you want to train on a single year.
 stations_seed=${stations_seed:-42}
-n_random_stations=${n_random_stations:-'none'} # 'none' or a number
-randomize_stations_persample=${randomize_stations_persample:-'false'} # 'true' or 'false'
+n_random_stations=${n_random_stations:-'100'} # 'none' or a number
+randomize_stations_persample=${randomize_stations_persample:-'true'} # 'true' or 'false'
 loss=${loss:-'MaskedCombinedMAEQuantileLoss'}
 transform=${transform:-'standard'}  # 'standard', 'minmax', 'none'
 epochs=${epochs:-120}
