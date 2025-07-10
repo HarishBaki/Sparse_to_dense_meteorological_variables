@@ -205,3 +205,5 @@ WRF_simulations/case_*
 WRF_simulations/run_1_geogrid/*.nc
 Extreme_cases/
 test_rtma_data_dict.pkl
+Input_DATA
+Predictions
