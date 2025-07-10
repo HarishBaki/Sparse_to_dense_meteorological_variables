@@ -196,7 +196,7 @@ class RTMA_sparse_to_dense_Dataset(Dataset):
             inputs_interp.append(interp)
         # Stack the interpolated inputs
         interp = np.stack(inputs_interp, axis=0) # shape: [num_input_variables, y, x] 
-        print('NYSM stations',nysm_latlon)
+
         if self.orography_as_channel:
             # Combine inputs: interpolated + orography + station mask
             input_tensor = np.concatenate([interp, self.orography,station_mask], axis=0)  # shape: [num_input_variables+2, y, x]
