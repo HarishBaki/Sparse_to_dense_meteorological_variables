@@ -7,9 +7,12 @@ import os, sys
 import glob
 import zarr
 from joblib import Parallel, delayed
-import os
+import os, argparse
 import dask.array as da
 import os, sys, time, glob, re
+import pickle
+
+import multiprocessing
 
 from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
@@ -27,186 +30,222 @@ wdir10 for wind direction
 si10 for wind speed
 '''
 
-def is_interactive():
-    import __main__ as main
-    return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
-
-if is_interactive() or len(sys.argv) == 1:
-    sys.argv = ["", "i10fg", 42, "none", "w"]
-var_name = sys.argv[1]
-stations_seed = int(sys.argv[2])
-n_stations = int_or_none(sys.argv[3])
-mode = sys.argv[4]
-
-freq = 5 # Frequency of the data in minutes
-dates = pd.date_range(start='2023-01-01T00:00', end='2023-12-31T23:59', freq=f'{freq}min')
-chunk_size = 24 * 60 // freq  # 24 hours in minutes divided by frequency
-yyyymmdd = pd.Series(dates.year*10000 + dates.month*100 + dates.day).unique()
-data_dir = 'data' #'/data/harish/Sparse_to_dense_meteorological_variables'
-
-if n_stations is not None:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/{stations_seed}/{n_stations}-inference-stations/NYSM_test.zarr"
-else:
-    target_zarr_store = f"{data_dir}/Barnes_interpolated/all-stations/NYSM_test.zarr"
-os.makedirs(target_zarr_store, exist_ok=True)
-
 # %%
-def init_zarr_store(zarr_store, dates, variable, mode, chunk_size=24):
+if __name__ == "__main__": 
+    # %%
+
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__') or 'ipykernel' in sys.argv[0]
+
+    # If run interactively, inject some sample arguments
+    if is_interactive() or len(sys.argv) == 1:
+        sys.argv = [
+            "",  # Script name placeholder
+            "--prediction_dir", "Predictions",
+            "--variable", "i10fg",
+            "--n_inference_stations", "none", 
+            "--fold","0",
+            "--mode", "w"
+        ]
+        print("DEBUG: Using injected args:", sys.argv)
+
+    # === Argparse and DDP setup ===
+    parser = argparse.ArgumentParser(description="Train with DDP")
+    parser.add_argument("--prediction_dir", type=str, default="Predictions", help="Directory to save predictions")
+    parser.add_argument("--variable", type=str, default="i10fg", 
+                        help="Target variable to train on ('i10fg','d2m','t2m','si10','sh2','sp')")
+    parser.add_argument("--n_inference_stations", type=str_or_none, default="none",
+                        help="Number of inference stations to use (e.g., 'none', '93', '62')")
+    parser.add_argument("--fold", type=int_or_none, default=0, help="Fold number for cross-validation")
+    parser.add_argument("--mode", type=str, default="w", choices=["w", "a"], help="Zarr mode: 'w' for write, 'a' for append")
+    args, unknown = parser.parse_known_args()
+
+    # %%
+    prediction_dir = args.prediction_dir
+    var_name = args.variable
+    n_inference_stations = args.n_inference_stations
+    fold = args.fold
+    mode = args.mode
+
+    # %%
+    freq = 5 # Frequency of the data in minutes
+    dates = pd.date_range(start='2023-01-01T00:00', end='2023-12-31T23:59', freq=f'{freq}min')
+    chunk_size = 24 # 24 hours in minutes divided by frequency
+    yyyymmdd = pd.Series(dates.year*10000 + dates.month*100 + dates.day).unique()
+    prediction_dir = 'Predictions' #'/data/harish/Sparse_to_dense_meteorological_variables'
+
+    if n_inference_stations is not None:
+        target_zarr_store = f"{prediction_dir}/Barnes_interpolated/{n_inference_stations}-inference-stations/fold_{fold}/NYSM_test.zarr"
+    else:
+        target_zarr_store = f"{prediction_dir}/Barnes_interpolated/all-stations/NYSM_test.zarr"
+    os.makedirs(target_zarr_store, exist_ok=True)
+
+    # %%
+    def init_zarr_store(zarr_store, dates, variable, mode, chunk_size=24):
+        orography = xr.open_dataset('orography.nc')
+        orography.attrs = {}
+        shape = (len(dates),) + orography.orog.shape  # (time, y, x)
+
+        # Create a lazy Dask array filled with NaNs
+        data = da.full(shape, np.nan, chunks=(chunk_size, -1, -1), dtype='float32')
+
+        template = xr.DataArray(
+            data,
+            dims=('time', 'y', 'x'),
+            coords={
+                'time': dates,
+                'latitude': orography.latitude,
+                'longitude': orography.longitude
+            },
+            name=variable,
+            attrs={}
+        )
+
+        ds = template.to_dataset()
+        ds.to_zarr(zarr_store,compute=False ,mode=mode)
+
+    # %%
+    # === Loading some topography and masking data ===
     orography = xr.open_dataset('orography.nc')
-    orography.attrs = {}
-    shape = (len(dates),) + orography.orog.shape  # (time, y, x)
+    RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
+    RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
+    orography = orography.set_coords(['latitude', 'longitude'])
+    orography = orography.orog.values
+    mask = xr.open_dataset('mask_2d.nc').mask
+    # Load NYSM station data
+    nysm = pd.read_csv('nysm.csv')
+    # NYSM station lat/lon
+    nysm_latlon = np.stack([
+        nysm['lat [degrees]'].values,
+        (nysm['lon [degrees]'].values + 360) % 360
+    ], axis=-1) # shape: (N, 2)
 
-    # Create a lazy Dask array filled with NaNs
-    data = da.full(shape, np.nan, chunks=(chunk_size, -1, -1), dtype='float32')
+    exclude_indices = [65, 102]
+    nysm_latlon = np.delete(nysm_latlon, exclude_indices, axis=0)
+    nysm = nysm.drop(index=exclude_indices).reset_index(drop=True)  # Drop the excluded indices from the DataFrame
 
-    template = xr.DataArray(
-        data,
-        dims=('time', 'y', 'x'),
+    # Precompute grid KDTree
+    grid_points = np.stack([RTMA_lat.ravel(), RTMA_lon.ravel()], axis=-1)
+    tree = cKDTree(grid_points)
+    # Query the station locations
+    _, indices_flat = tree.query(nysm_latlon)
+    # Convert flat indices to 2D (y, x)
+    y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
+
+    # %%
+    # Loading the NYSM station data
+    NYSM = xr.open_dataset('data/NYSM.nc')
+    NYSM['longitude'] = (NYSM['longitude']+360) % 360   # this is needed to match the RTMA lon
+    NYSM_lat = NYSM.latitude.values
+    NYSM_lon = NYSM.longitude.values
+    # Precompute grid KDTree
+    station_points = np.stack([NYSM_lat.ravel(), NYSM_lon.ravel()], axis=-1)
+    tree = cKDTree(station_points)
+    # Query the station locations
+    _, station_indices = tree.query(nysm_latlon)
+    NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
+    # Now, since both nysm_latlon and NYSM are aligned, we can safely reset the station_indices
+    station_indices = np.arange(len(nysm_latlon))
+    NYSM = NYSM.resample(time=f'{freq}min').nearest()
+    # %%
+    # Check for the n_random_stations
+    if n_inference_stations is not None and fold is not None:
+        with open(f"inference_stations_list.pkl", "rb") as f:
+            inference_stations_list = pickle.load(f)
+        random_indices = inference_stations_list[f'n_infer_{n_inference_stations}'][f'fold_{fold}']['inference']
+        # Update the y_indices and x_indices to the random stations
+        y_indices = y_indices[random_indices]
+        x_indices = x_indices[random_indices]
+        nysm_latlon = nysm_latlon[random_indices]
+        station_indices = station_indices[random_indices]
+
+    # %%
+    # Get the best gamma and kappa_star for Barnes
+    scores_df = pd.read_csv('Barnes_parameter_search.csv')
+    gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
+    kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
+    # %%
+    '''
+    ds = NYSM[var_name].sel(time=dates)
+    sample = ds.isel(time=11)
+    print(sample.isel(station=station_indices).isnull().any().values)
+    local_station_indices = station_indices.copy()
+    local_nysm_latlon = nysm_latlon.copy()
+    missing_mask = sample.isel(station=local_station_indices).isnull()
+    missing_station_indices = np.argwhere(missing_mask.values)
+    local_station_indices = np.delete(local_station_indices, missing_station_indices)
+    local_nysm_latlon = np.delete(local_nysm_latlon, missing_station_indices, axis=0)
+
+    station_values = sample.values[local_station_indices]
+    interp_flat = interpolate_to_points(
+        local_nysm_latlon, station_values, grid_points, interp_type='barnes', 
+        gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star,
+    )
+    interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
+    interp = xr.DataArray(
+        interp,
+        dims=['y', 'x'],
         coords={
-            'time': dates,
-            'latitude': orography.latitude,
-            'longitude': orography.longitude
-        },
-        name=variable,
-        attrs={}
+            'latitude': (['y', 'x'], RTMA_lat),
+            'longitude': (['y', 'x'], RTMA_lon)
+        }
+    )
+    interp.where(mask,0).plot()
+    # examined the influence of having nans and eliminating nans, using local_station_values and local_nysm_latlon.
+    '''
+
+    # %%
+    # Determine the number of available CPUs
+    allocated_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
+    n_jobs = min(120, allocated_cpus)
+    print(f"Using {n_jobs} parallel jobs based on available CPUs: {allocated_cpus}")
+
+    ds = NYSM[var_name].sel(time=dates)
+
+    # Initialize the Zarr store
+    init_zarr_store(target_zarr_store, dates, var_name, mode, chunk_size=chunk_size)
+
+    # Open Zarr for writing
+    zarr_write = zarr.open(target_zarr_store, mode='a')
+    zarr_variable = zarr_write[var_name]
+
+    # Interpolation function
+    def interpolate_and_write_block(start_idx):
+        success = 0
+        end_idx = min(start_idx + chunk_size, len(ds.time))
+        for t_idx in range(start_idx, end_idx):
+            try:
+                sample = ds.isel(time=t_idx)
+                # Already the station_indices and nysm_latlon are randomly selected. 
+                # But, we need to go through another layer of filtering missing stations. 
+                local_station_indices = station_indices.copy()
+                local_nysm_latlon = nysm_latlon.copy()
+                missing_mask = sample.isel(station=local_station_indices).isnull()
+                missing_station_indices = np.argwhere(missing_mask.values)
+                local_station_indices = np.delete(local_station_indices, missing_station_indices)
+                local_nysm_latlon = np.delete(local_nysm_latlon, missing_station_indices, axis=0)
+
+                station_values = sample.values[local_station_indices]
+                interp_flat = interpolate_to_points(
+                    local_nysm_latlon, station_values, grid_points, interp_type='barnes',
+                    gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star
+                )
+                interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
+                zarr_variable[t_idx, :, :] = interp
+                success += 1
+            except Exception as e:
+                print(f"Time index {t_idx} failed: {e}")
+        return success
+
+    # Parallel execution
+    from tqdm import tqdm
+    chunk_starts = list(range(0, len(ds.time), chunk_size))
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(interpolate_and_write_block)(i) for i in tqdm(chunk_starts)
     )
 
-    ds = template.to_dataset()
-    ds.to_zarr(zarr_store,compute=False ,mode=mode)
-
-# %%
-# === Loading some topography and masking data ===
-orography = xr.open_dataset('orography.nc')
-RTMA_lat = orography.latitude.values    # Nx, Ny 2D arrays
-RTMA_lon = orography.longitude.values   # Nx, Ny 2D arrays
-orography = orography.orog.values
-mask = xr.open_dataset('mask_2d.nc').mask
-# Load NYSM station data
-nysm = pd.read_csv('nysm.csv')
-# NYSM station lat/lon
-nysm_latlon = np.stack([
-    nysm['lat [degrees]'].values,
-    (nysm['lon [degrees]'].values + 360) % 360
-], axis=-1) # shape: (N, 2)
-
-# Precompute grid KDTree
-grid_points = np.stack([RTMA_lat.ravel(), RTMA_lon.ravel()], axis=-1)
-tree = cKDTree(grid_points)
-# Query the station locations
-_, indices_flat = tree.query(nysm_latlon)
-# Convert flat indices to 2D (y, x)
-y_indices, x_indices = np.unravel_index(indices_flat, orography.shape)
-
-# %%
-# Loading the NYSM station data
-NYSM = xr.open_dataset('data/NYSM.nc')
-NYSM['longitude'] = (NYSM['longitude']+360) % 360   # this is needed to match the RTMA lon
-NYSM_lat = NYSM.latitude.values
-NYSM_lon = NYSM.longitude.values
-# Precompute grid KDTree
-station_points = np.stack([NYSM_lat.ravel(), NYSM_lon.ravel()], axis=-1)
-tree = cKDTree(station_points)
-# Query the station locations
-_, station_indices = tree.query(nysm_latlon)
-NYSM = NYSM.isel(station=station_indices)  # this is needed to match the nysm_latlon order
-NYSM = NYSM.resample(time=f'{freq}min').nearest()
-# %%
-# Check for the n_random_stations
-if n_stations is not None:
-    # Randomly select n_random_stations from the NYSM stations
-    rng = np.random.default_rng(stations_seed) # The dataset index will always pick the same random stations for that seed, regardless of which worker, GPU, or process loads it.
-    perm = rng.permutation(len(nysm_latlon))
-    #random_indices = rng.choice(len(self.nysm_latlon), self.n_random_stations, replace=False)
-    random_indices = perm[:n_stations]  # This will give same first n random indices for n_random_stations = 40, 50, 60, ...
-    # Update the y_indices and x_indices to the random stations
-    y_indices = y_indices[random_indices]
-    x_indices = x_indices[random_indices]
-    nysm_latlon = nysm_latlon[random_indices]
-    station_indices = station_indices[random_indices]
-
-# %%
-# Get the best gamma and kappa_star for Barnes
-scores_df = pd.read_csv('Barnes_parameter_search.csv')
-gamma = scores_df[scores_df['idx'] == 14]['gamma'].iloc[0]
-kappa_star = scores_df[scores_df['idx'] == 14]['kappa_star'].iloc[0]
-# %%
-'''
-ds = NYSM[var_name].sel(time=dates)
-sample = ds.isel(time=11)
-print(sample.isel(station=station_indices).isnull().any().values)
-local_station_indices = station_indices.copy()
-local_nysm_latlon = nysm_latlon.copy()
-missing_mask = sample.isel(station=local_station_indices).isnull()
-missing_station_indices = np.argwhere(missing_mask.values)
-local_station_indices = np.delete(local_station_indices, missing_station_indices)
-local_nysm_latlon = np.delete(local_nysm_latlon, missing_station_indices, axis=0)
-
-station_values = sample.values[local_station_indices]
-interp_flat = interpolate_to_points(
-    local_nysm_latlon, station_values, grid_points, interp_type='barnes', 
-    gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star,
-)
-interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
-interp = xr.DataArray(
-    interp,
-    dims=['y', 'x'],
-    coords={
-        'latitude': (['y', 'x'], RTMA_lat),
-        'longitude': (['y', 'x'], RTMA_lon)
-    }
-)
-interp.where(mask,0).plot()
-# examined the influence of having nans and eliminating nans, using local_station_values and local_nysm_latlon.
-'''
-
-# %%
-n_jobs = 120  # 2 threads per chunk, parallel across 60 chunks
-ds = NYSM[var_name].sel(time=dates)
-
-# Initialize the Zarr store
-init_zarr_store(target_zarr_store, dates, var_name, mode, chunk_size=chunk_size)
-
-# Open Zarr for writing
-zarr_write = zarr.open(target_zarr_store, mode='a')
-zarr_variable = zarr_write[var_name]
-
-# Interpolation function
-def interpolate_and_write_block(start_idx):
-    success = 0
-    end_idx = min(start_idx + chunk_size, len(ds.time))
-    for t_idx in range(start_idx, end_idx):
-        try:
-            sample = ds.isel(time=t_idx)
-            # Already the station_indices and nysm_latlon are randomly selected. 
-            # But, we need to go through another layer of filtering missing stations. 
-            local_station_indices = station_indices.copy()
-            local_nysm_latlon = nysm_latlon.copy()
-            missing_mask = sample.isel(station=local_station_indices).isnull()
-            missing_station_indices = np.argwhere(missing_mask.values)
-            local_station_indices = np.delete(local_station_indices, missing_station_indices)
-            local_nysm_latlon = np.delete(local_nysm_latlon, missing_station_indices, axis=0)
-
-            station_values = sample.values[local_station_indices]
-            interp_flat = interpolate_to_points(
-                local_nysm_latlon, station_values, grid_points, interp_type='barnes',
-                gamma=gamma, minimum_neighbors=1,kappa_star=kappa_star
-            )
-            interp = interp_flat.reshape(RTMA_lat.shape).astype(np.float32)
-            zarr_variable[t_idx, :, :] = interp
-            success += 1
-        except Exception as e:
-            print(f"Time index {t_idx} failed: {e}")
-    return success
-
-# Parallel execution
-from tqdm import tqdm
-chunk_starts = list(range(0, len(ds.time), chunk_size))
-results = Parallel(n_jobs=n_jobs)(
-    delayed(interpolate_and_write_block)(i) for i in tqdm(chunk_starts)
-)
-
-# Optional: print summary
-total_success = sum(results)
-print(f"Interpolation completed: {total_success}/{len(ds.time)} time steps written.")
-
+    # Optional: print summary
+    total_success = sum(results)
+    print(f"Interpolation completed: {total_success}/{len(ds.time)} time steps written.")
 # %%
